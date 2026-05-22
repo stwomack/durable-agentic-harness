@@ -7,6 +7,10 @@ RUN pip install --upgrade pip && pip install -e .
 
 COPY shared/ ./shared/
 COPY fastapi_app/ ./fastapi_app/
+# FastAPI imports workflow classes (HelloWorkflow, SelfEvolvingStockAgentWorkflow) and
+# default_candidate_strategies to start workflows. Activity modules get imported transitively
+# via the workflow file but are never executed in this process — they only run in the worker.
+COPY worker/ ./worker/
 
 EXPOSE 8000
 CMD ["uvicorn", "fastapi_app.main:app", "--host", "0.0.0.0", "--port", "8000"]

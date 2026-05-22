@@ -1,24 +1,31 @@
+"""Run a backtest in an isolated Docker sandbox.
+
+For demo reliability we use deterministic hand-written backtest scripts (see
+`backtest_template.build_backtest_code`) instead of LLM-generated code. The
+sandbox container, volume mount, and Scorecard contract are unchanged, so the
+War Room UI behaviour is identical.
+"""
 import asyncio
 import json
-import re
 
 import docker
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from shared.models import BacktestInput, Scorecard
-from shared.openai_client import make_openai_client
-from shared.prompts import BACKTEST_PROMPT
 from shared.settings import settings
+from worker.activities.backtest_template import build_backtest_code
 
 
 @activity.defn
 async def run_backtest_in_sandbox(inp: BacktestInput) -> Scorecard:
-    activity.heartbeat({"strategy_id": inp.strategy_spec.id, "stage": "writing_code"})
+    activity.heartbeat({"strategy_id": inp.strategy_spec.id, "stage": "building_code"})
+    try:
+        code = build_backtest_code(inp.strategy_spec, inp.historical_data_ref.path)
+    except ValueError as e:
+        raise ApplicationError(str(e), type="UnknownStrategyFamily", non_retryable=True)
 
-    code = await _generate_backtest_code(inp)
     activity.heartbeat({"strategy_id": inp.strategy_spec.id, "stage": "executing"})
-
     try:
         stdout = await asyncio.get_event_loop().run_in_executor(
             None, _run_code_in_container, code, inp.historical_data_ref.path
@@ -27,29 +34,6 @@ async def run_backtest_in_sandbox(inp: BacktestInput) -> Scorecard:
         raise ApplicationError(f"sandbox execution failed: {e}", type="SandboxError")
 
     return _parse_scorecard(stdout, inp.strategy_spec.id, code)
-
-
-async def _generate_backtest_code(inp: BacktestInput) -> str:
-    client = make_openai_client()
-    response = await client.chat.completions.create(
-        model=settings.openai_model,
-        messages=[
-            {"role": "system", "content": BACKTEST_PROMPT},
-            {"role": "user", "content": inp.strategy_spec.to_prompt()},
-        ],
-        temperature=0.3,
-    )
-    raw = response.choices[0].message.content or ""
-    code = _extract_python_block(raw)
-    if not code:
-        raise ApplicationError("LLM did not produce a python code block",
-                               type="LLMOutputError", non_retryable=True)
-    return code
-
-
-def _extract_python_block(text: str) -> str:
-    m = re.search(r"```(?:python)?\n(.*?)```", text, re.DOTALL)
-    return m.group(1).strip() if m else text.strip()
 
 
 def _run_code_in_container(code: str, data_host_path: str) -> str:

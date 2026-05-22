@@ -21,17 +21,20 @@ export function MissionControl({
           value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())}
         />
         <button
-          disabled={busy || !!workflowId}
+          disabled={busy}
           onClick={async () => {
             setBusy(true);
             try {
               const r = await startRun({ ticker });
               onStart(r.workflow_id);
+            } catch (e: any) {
+              console.error("startRun failed:", e);
+              alert("startRun failed: " + (e?.message || String(e)));
             } finally { setBusy(false); }
           }}
           className="bg-accent text-background font-medium rounded px-4 py-2 hover:opacity-90 disabled:opacity-40"
         >
-          Start Self-Evolving Agent
+          {busy ? "Starting..." : (workflowId ? "Start New Run" : "Start Self-Evolving Agent")}
         </button>
         {workflowId && (
           <a href={`http://localhost:8233/namespaces/default/workflows/${workflowId}`}

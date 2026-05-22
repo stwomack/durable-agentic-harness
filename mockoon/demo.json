@@ -14,7 +14,7 @@
       "responses": [
         {
           "statusCode": 200,
-          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"range\":\"{{queryParam 'range'}}\",\"ohlcv\":[{{#repeat 750 comma=true}}{\"t\":{{add @index 1700000000}},\"o\":{{float 100 200}},\"h\":{{float 100 220}},\"l\":{{float 80 180}},\"c\":{{float 100 220}},\"v\":{{int 1000000 5000000}}}{{/repeat}}]}",
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"range\":\"{{queryParam 'range'}}\",\"ohlcv\":[{{#repeat 750 comma=true}}{\"t\":{{add @index 1700000000}},\"o\":{{float 100 200}},\"h\":{{float 100 220}},\"l\":{{float 80 180}},\"c\":{{float 100 220}},\"v\":{{int 1000000 5000000}} }{{/repeat}}]}",
           "headers": [
             {
               "key": "Content-Type",
@@ -50,7 +50,7 @@
       "responses": [
         {
           "statusCode": 200,
-          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"price\":{{float 140 180}},\"ts\":{{now 'unix'}}}",
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"price\":{{float 140 180}},\"ts\":{{int 1700000000 1800000000}} }",
           "headers": [
             {
               "key": "Content-Type",
@@ -86,7 +86,7 @@
       "responses": [
         {
           "statusCode": 200,
-          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"rsi\":{{float 25 75}},\"ema12\":{{float 140 175}},\"ema26\":{{float 138 172}},\"macd\":{{float -2 2}},\"bb_upper\":{{float 175 190}},\"bb_lower\":{{float 130 150}}}",
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"rsi\":{{float 25 75}},\"ema12\":{{float 140 175}},\"ema26\":{{float 138 172}},\"macd\":{{float -2 2}},\"bb_upper\":{{float 175 190}},\"bb_lower\":{{float 130 150}} }",
           "headers": [
             {
               "key": "Content-Type",
@@ -122,7 +122,7 @@
       "responses": [
         {
           "statusCode": 200,
-          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"headlines\":[{\"title\":\"{{queryParam 'ticker'}} beats earnings expectations\",\"published_at\":{{now 'unix'}}},{\"title\":\"Analyst upgrades {{queryParam 'ticker'}} to Buy\",\"published_at\":{{now 'unix'}}}]}",
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"headlines\":[{\"title\":\"{{queryParam 'ticker'}} beats earnings expectations\",\"published_at\":{{int 1700000000 1800000000}} },{\"title\":\"Analyst upgrades {{queryParam 'ticker'}} to Buy\",\"published_at\":{{int 1700000000 1800000000}} }]}",
           "headers": [
             {
               "key": "Content-Type",
@@ -194,7 +194,7 @@
       "responses": [
         {
           "statusCode": 200,
-          "body": "{\"orderId\":\"ord-{{shuffle 'a' 'b' 'c'}}{{int 1000 9999}}\",\"status\":\"filled\",\"filledQty\":{{body 'qty' 1}},\"avgPrice\":{{float 140 180}}}",
+          "body": "{\"orderId\":\"ord-{{shuffle 'a' 'b' 'c'}}{{int 1000 9999}}\",\"status\":\"filled\",\"filledQty\":{{body 'qty' 1}},\"avgPrice\":{{float 140 180}} }",
           "headers": [
             {
               "key": "Content-Type",

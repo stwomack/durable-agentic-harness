@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MissionControl } from "./components/MissionControl";
 import { EventLog } from "./components/EventLog";
 import { WarRoom } from "./components/WarRoom";
@@ -11,6 +11,21 @@ import { useWorkflow } from "./hooks/useWorkflow";
 export default function App() {
   const [workflowId, setWorkflowId] = useState<string | null>(null);
   const [dismissedApprovals, setDismissedApprovals] = useState<Set<string>>(new Set());
+
+  // On mount, auto-attach to the most recent run so a page refresh (or starting
+  // the workflow via curl/Temporal CLI) doesn't leave the UI with no SSE subscription.
+  useEffect(() => {
+    if (workflowId) return;
+    fetch("/api/runs/")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: { workflow_id: string }[]) => {
+        const latest = rows?.[0]?.workflow_id;
+        if (latest && latest !== "-" && !latest.startsWith("hello-")) {
+          setWorkflowId(latest);
+        }
+      })
+      .catch(() => {});
+  }, [workflowId]);
   const expected = 8;
   const events = useSSE(workflowId);
   const { phase, scorecards, winningStrategy, ticks, trades, pendingApproval } = useWorkflow(events);
@@ -23,7 +38,18 @@ export default function App() {
         <h1 className="text-3xl font-semibold tracking-tight">
           <span className="text-accent">Durable</span> Agentic Harness
         </h1>
-        <span className="text-xs font-mono text-foreground/50">{workflowId ?? "no active run"}</span>
+        <span className="text-xs font-mono text-foreground/50 flex items-center gap-2">
+          {workflowId ?? "no active run"}
+          {workflowId && (
+            <button
+              onClick={() => setWorkflowId(null)}
+              className="text-foreground/40 hover:text-rose-300"
+              title="detach from this run"
+            >
+              ✕
+            </button>
+          )}
+        </span>
       </header>
       <MissionControl workflowId={workflowId} onStart={setWorkflowId} currentPhase={phase} />
       <section>

@@ -122,7 +122,24 @@ class SelfEvolvingStockAgentWorkflow:
                 "error": sc.error, "generated_code": sc.generated_code,
             })
 
-        winner = select_winner(self.scorecards)
+        try:
+            winner = select_winner(self.scorecards)
+        except ValueError as e:
+            # All backtests failed (e.g., sandbox image missing). Emit a terminal failure event
+            # and stop the workflow with a non-retryable error so Temporal doesn't crash-loop.
+            errors = [sc.error for sc in self.scorecards if sc.error]
+            await self._emit(wf_id, "phase_change", {
+                "phase": "FAILED",
+                "reason": str(e),
+                "backtest_errors": errors[:8],
+            })
+            from temporalio.exceptions import ApplicationError
+            raise ApplicationError(
+                f"Phase 1 failed: {e}. All {len(self.scorecards)} backtests errored. "
+                f"First error: {errors[0] if errors else 'unknown'}",
+                type="Phase1Failed",
+                non_retryable=True,
+            )
         winner_spec = next(s for s in inp.candidate_strategies if s.id == winner.strategy_id)
         self.winning_strategy = winner_spec
         self.live_roi = 0.0

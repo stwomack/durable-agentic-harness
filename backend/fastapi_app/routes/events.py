@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
 
@@ -10,5 +12,7 @@ router = APIRouter(prefix="/api/runs", tags=["events"])
 async def stream(workflow_id: str) -> EventSourceResponse:
     async def event_gen():
         async for event in bus.subscribe(workflow_id):
-            yield {"event": event["kind"], "data": event}
+            # sse-starlette str()s non-string `data`, which gives Python dict repr
+            # (single quotes) and breaks JSON.parse in the browser. Serialize ourselves.
+            yield {"event": event["kind"], "data": json.dumps(event)}
     return EventSourceResponse(event_gen())

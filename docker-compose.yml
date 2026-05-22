@@ -1,26 +1,21 @@
-# Temporal server is NOT bundled here — the user runs `temporal server start-dev` on the host.
-# Containers reach it via host.docker.internal:7233 (Docker Desktop on macOS/Windows).
+# Temporal AND Mockoon run on the host (not bundled here). The user runs:
+#   - `temporal server start-dev` on the host
+#   - `mockoon-cli start --data ./mockoon/demo.json --port 3001` (or the Mockoon Desktop app) on the host
+# Containers reach the host via host.docker.internal (Docker Desktop on macOS/Windows).
+# The env values for TEMPORAL_ADDRESS / MOCKOON_BASE_URL / FASTAPI_INTERNAL_URL all come from .env.
 services:
-  mockoon:
-    image: mockoon/cli:latest
-    command: ["--data", "/data/demo.json", "--port", "3001"]
-    volumes:
-      - ./mockoon:/data:ro
-    ports: ["3001:3001"]
-    networks: [demo_net]
-
   fastapi:
     build:
       context: ./backend
       dockerfile: Dockerfile.fastapi
     env_file: .env
-    environment:
-      - TEMPORAL_ADDRESS=host.docker.internal:7233
-      - MOCKOON_BASE_URL=http://mockoon:3001
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    sysctls:
+      # Disable IPv6 inside the container so DNS only returns A records
+      # and Tonic/grpc doesn't try a non-routable IPv6 ULA for host.docker.internal.
+      - net.ipv6.conf.all.disable_ipv6=1
     ports: ["8000:8000"]
-    depends_on: [mockoon]
     volumes:
       - fastapi-data:/app/fastapi_app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -31,13 +26,13 @@ services:
       context: ./backend
       dockerfile: Dockerfile.worker
     env_file: .env
-    environment:
-      - TEMPORAL_ADDRESS=host.docker.internal:7233
-      - MOCKOON_BASE_URL=http://mockoon:3001
-      - FASTAPI_INTERNAL_URL=http://fastapi:8000
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    depends_on: [mockoon, fastapi]
+    sysctls:
+      # Disable IPv6 inside the container so DNS only returns A records
+      # and Tonic/grpc doesn't try a non-routable IPv6 ULA for host.docker.internal.
+      - net.ipv6.conf.all.disable_ipv6=1
+    depends_on: [fastapi]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - sandbox-data:/data
@@ -57,4 +52,7 @@ networks:
 
 volumes:
   fastapi-data:
+  # Fixed name (no compose project prefix) so the worker can spawn sibling sandbox
+  # containers via docker.sock and reference the volume by the same bare name.
   sandbox-data:
+    name: sandbox-data
