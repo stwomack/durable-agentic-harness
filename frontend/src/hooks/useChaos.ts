@@ -16,9 +16,12 @@ export function useChaos(workflowId: string | null) {
     injectBadNews: () =>
       workflowId &&
       call("inject_news", {
+        // Stays clear of RESTRICTED_NEWS_TERMS in shared/constants.py so the SELL
+        // is allowed through risk_check (sentiment also kept above -0.5 block threshold).
+        // Demo shows the agent reacting to bad news with a SELL, not getting blocked.
         workflow_id: workflowId,
-        headline: "SEC probe into NVDA announced overnight",
-        sentiment: -0.85,
+        headline: "Tech sector sees broad sell-off; analysts cut NVDA price target",
+        sentiment: -0.4,
       }),
   };
 }

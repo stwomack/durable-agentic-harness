@@ -36,6 +36,8 @@ class SelfEvolvingStockAgentWorkflow:
         self._approvals: dict[str, bool] = {}
         self._injected_news: list[NewsHeadline] = []
         self._injected_sentiment_override: Optional[float] = None
+        # Sticky for N ticks so signal-vs-activity timing races don't drop the override.
+        self._injection_ttl: int = 0
         self._fast_forward: bool = False
         self._stop: bool = False
         self._force_drift: bool = False
@@ -57,6 +59,7 @@ class SelfEvolvingStockAgentWorkflow:
     def inject_news(self, headline: str, sentiment: float) -> None:
         self._injected_news.append(NewsHeadline(title=headline, published_at=0))
         self._injected_sentiment_override = sentiment
+        self._injection_ttl = 2  # apply to the next 2 ticks
 
     @workflow.signal
     def force_drift(self) -> None:
@@ -187,12 +190,24 @@ class SelfEvolvingStockAgentWorkflow:
                 start_to_close_timeout=timedelta(seconds=30),
                 retry_policy=RetryPolicy(maximum_attempts=5),
             )
+            injection_applied = False
             if self._injected_news:
                 news.headlines.extend(self._injected_news)
                 self._injected_news = []
-            if self._injected_sentiment_override is not None:
+                injection_applied = True
+            if self._injection_ttl > 0 and self._injected_sentiment_override is not None:
                 news.sentiment = self._injected_sentiment_override
-                self._injected_sentiment_override = None
+                self._injection_ttl -= 1
+                injection_applied = True
+                if self._injection_ttl == 0:
+                    self._injected_sentiment_override = None
+            if injection_applied:
+                await self._emit(wf_id, "chaos", {
+                    "kind": "bad_news_applied",
+                    "tick": self.tick_count,
+                    "sentiment_applied": news.sentiment,
+                    "ttl_remaining": self._injection_ttl,
+                })
 
             intent = await workflow.execute_activity(
                 call_agent,

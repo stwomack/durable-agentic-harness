@@ -27,7 +27,7 @@ async def reject(workflow_id: str, body: ApprovalBody) -> dict:
     client = await get_temporal_client()
     h = client.get_workflow_handle(workflow_id)
     try:
-        await h.signal("reject_trade", body.trade_id, body.reason or "")
+        await h.signal("reject_trade", args=[body.trade_id, body.reason or ""])
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"ok": True}

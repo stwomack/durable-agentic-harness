@@ -71,7 +71,8 @@ async def fast_forward(body: WorkflowChaos) -> dict:
 async def inject_news(body: InjectNewsBody) -> dict:
     client = await get_temporal_client()
     h = client.get_workflow_handle(body.workflow_id)
-    await h.signal("inject_news", body.headline, body.sentiment)
+    # Multi-arg signals must be passed via args=[...]; positional > 1 raises TypeError.
+    await h.signal("inject_news", args=[body.headline, body.sentiment])
     log_chaos(body.workflow_id, "inject_news", body.model_dump())
     return {"ok": True}
 

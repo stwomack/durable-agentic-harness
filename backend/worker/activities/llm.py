@@ -52,8 +52,12 @@ async def call_agent(inp: AgentCallInput) -> TradeIntent:
     except ValueError:
         action = TradeAction.HOLD
 
+    # Always mint a unique id — the LLM tends to echo the strategy id, which would
+    # collide with prior approvals in self._approvals and silently auto-approve every
+    # subsequent trade. The id is only used to correlate the approval signal, so a
+    # fresh uuid per call is correct.
     return TradeIntent(
-        id=str(data.get("id") or f"t-{uuid.uuid4().hex[:8]}"),
+        id=f"t-{uuid.uuid4().hex[:8]}",
         ticker=str(data.get("ticker", inp.market.ticker)),
         action=action,
         qty=float(data.get("qty", 0)),

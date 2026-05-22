@@ -29,6 +29,16 @@ def _risk_check_pure(inp: RiskCheckInput) -> RiskResult:
         return RiskResult(decision=RiskDecision.BLOCK,
                           reason=f"notional {notional:.0f} exceeds cap {inp.limits.max_notional_per_trade:.0f}")
 
+    # Compliance: every SELL needs a human signoff (the LLM never closes a position alone).
+    if inp.intent.action == TradeAction.SELL:
+        return RiskResult(decision=RiskDecision.ALLOW_REQUIRES_APPROVAL,
+                          reason="all SELLs require human approval")
+
+    # Any trade during mildly-negative news must be reviewed.
+    if inp.news.sentiment < 0:
+        return RiskResult(decision=RiskDecision.ALLOW_REQUIRES_APPROVAL,
+                          reason=f"sentiment {inp.news.sentiment:.2f} negative; human review required")
+
     if notional > inp.approval_threshold:
         return RiskResult(decision=RiskDecision.ALLOW_REQUIRES_APPROVAL,
                           reason=f"notional {notional:.0f} > approval threshold {inp.approval_threshold:.0f}")
