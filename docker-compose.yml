@@ -1,0 +1,60 @@
+# Temporal server is NOT bundled here — the user runs `temporal server start-dev` on the host.
+# Containers reach it via host.docker.internal:7233 (Docker Desktop on macOS/Windows).
+services:
+  mockoon:
+    image: mockoon/cli:latest
+    command: ["--data", "/data/demo.json", "--port", "3001"]
+    volumes:
+      - ./mockoon:/data:ro
+    ports: ["3001:3001"]
+    networks: [demo_net]
+
+  fastapi:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.fastapi
+    env_file: .env
+    environment:
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
+      - MOCKOON_BASE_URL=http://mockoon:3001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports: ["8000:8000"]
+    depends_on: [mockoon]
+    volumes:
+      - fastapi-data:/app/fastapi_app
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks: [demo_net]
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    env_file: .env
+    environment:
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
+      - MOCKOON_BASE_URL=http://mockoon:3001
+      - FASTAPI_INTERNAL_URL=http://fastapi:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: [mockoon, fastapi]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - sandbox-data:/data
+    networks: [demo_net]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports: ["5173:5173"]
+    depends_on: [fastapi]
+    networks: [demo_net]
+
+networks:
+  demo_net:
+    driver: bridge
+
+volumes:
+  fastapi-data:
+  sandbox-data:

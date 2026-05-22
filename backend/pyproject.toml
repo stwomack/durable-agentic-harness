@@ -1,0 +1,44 @@
+[project]
+name = "durable-agentic-harness"
+version = "0.1.0"
+description = "Self-evolving stock agent powered by Temporal + OpenAI Agents SDK"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "temporalio>=1.9.0",
+  "openai>=1.50.0",
+  "openai-agents>=0.2.0",
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "httpx>=0.27.0",
+  "pydantic>=2.8.0",
+  "pydantic-settings>=2.4.0",
+  "python-dotenv>=1.0.0",
+  "structlog>=24.1.0",
+  "sse-starlette>=2.1.0",
+  "docker>=7.1.0",
+  "yfinance>=0.2.40",
+  "pandas>=2.2.0",
+  "numpy>=1.26.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+  "pytest-httpx>=0.30.0",
+  "ruff>=0.5.0",
+  "black>=24.0.0"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["e2e: end-to-end smoke tests requiring full compose stack"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]

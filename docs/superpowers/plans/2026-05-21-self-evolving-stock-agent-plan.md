@@ -145,7 +145,9 @@ backend/fastapi_app/db.sqlite3-journal
 
 ```dotenv
 OPENAI_API_KEY=sk-replace-me
-TEMPORAL_ADDRESS=temporal:7233
+# Temporal runs on the host (not in compose). From inside containers we reach it via host.docker.internal.
+# Host-side scripts use localhost:7233.
+TEMPORAL_ADDRESS=host.docker.internal:7233
 TEMPORAL_NAMESPACE=default
 TEMPORAL_TASK_QUEUE=stock-agent
 DATA_MODE=mock
@@ -1166,27 +1168,9 @@ git commit -m "feat(fastapi): add app skeleton, temporal client, sqlite, hello r
 - [ ] **Step 1: Create `docker-compose.yml`**
 
 ```yaml
+# Temporal server is NOT bundled here — the user runs `temporal server start-dev` on the host.
+# Containers reach it via host.docker.internal:7233 (Docker Desktop on macOS/Windows).
 services:
-  temporal:
-    image: temporalio/auto-setup:1.27
-    environment:
-      - DB=sqlite
-      - SQLITE_FILE=/etc/temporal/temporal.db
-    ports:
-      - "7233:7233"
-    volumes:
-      - temporal-data:/etc/temporal
-    networks: [demo_net]
-
-  temporal-ui:
-    image: temporalio/ui:2.31.2
-    environment:
-      - TEMPORAL_ADDRESS=temporal:7233
-      - TEMPORAL_CORS_ORIGINS=http://localhost:5173,http://localhost
-    ports: ["8233:8080"]
-    depends_on: [temporal]
-    networks: [demo_net]
-
   mockoon:
     image: mockoon/cli:latest
     command: ["--data", "/data/demo.json", "--port", "3001"]
@@ -1201,12 +1185,15 @@ services:
       dockerfile: Dockerfile.fastapi
     env_file: .env
     environment:
-      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
       - MOCKOON_BASE_URL=http://mockoon:3001
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports: ["8000:8000"]
-    depends_on: [temporal, mockoon]
+    depends_on: [mockoon]
     volumes:
       - fastapi-data:/app/fastapi_app
+      - /var/run/docker.sock:/var/run/docker.sock
     networks: [demo_net]
 
   worker:
@@ -1215,10 +1202,12 @@ services:
       dockerfile: Dockerfile.worker
     env_file: .env
     environment:
-      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
       - MOCKOON_BASE_URL=http://mockoon:3001
       - FASTAPI_INTERNAL_URL=http://fastapi:8000
-    depends_on: [temporal, mockoon, fastapi]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on: [mockoon, fastapi]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - sandbox-data:/data
@@ -1237,7 +1226,6 @@ networks:
     driver: bridge
 
 volumes:
-  temporal-data:
   fastapi-data:
   sandbox-data:
 ```

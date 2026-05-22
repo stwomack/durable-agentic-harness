@@ -154,6 +154,15 @@ LOG_LEVEL=INFO
 
 ---
 
+## 6.5 House rules (locked during the build)
+
+These overrides apply to ALL work in this repo:
+
+1. **No `Co-Authored-By: Claude…` trailers** on git commits. Clean commit history only.
+2. **Batch commits at phase boundaries**, not per task. Subagents must create/edit files but NOT commit during a phase. Controller commits once when each phase wraps.
+3. **Temporal server runs on the host**, not in compose. `docker-compose.yml` must NOT include `temporal` or `temporal-ui` services. Containers reach the host's Temporal at `host.docker.internal:7233`. The Temporal Web UI is whatever port the user's local install uses.
+4. **`.env`** values inside compose use `TEMPORAL_ADDRESS=host.docker.internal:7233`. Host-side scripts (running outside Docker) use `localhost:7233`.
+
 ## 7. How to run things
 
 > Detailed implementation commands will be filled in by the implementation plan; the targets below are the contract.

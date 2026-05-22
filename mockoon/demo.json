@@ -1,0 +1,392 @@
+{
+  "uuid": "8ce3a275-eb7a-44ea-9443-b55aafd65d63",
+  "lastMigration": 33,
+  "name": "Durable Agent Demo",
+  "endpointPrefix": "",
+  "latency": 0,
+  "port": 3001,
+  "hostname": "0.0.0.0",
+  "routes": [
+    {
+      "uuid": "95c8b88c-d85b-4200-9ec3-94ff7f8584c8",
+      "method": "get",
+      "endpoint": "market/prices",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"range\":\"{{queryParam 'range'}}\",\"ohlcv\":[{{#repeat 750 comma=true}}{\"t\":{{add @index 1700000000}},\"o\":{{float 100 200}},\"h\":{{float 100 220}},\"l\":{{float 80 180}},\"c\":{{float 100 220}},\"v\":{{int 1000000 5000000}}}{{/repeat}}]}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "ab7c61ff-f4f8-4fae-ae41-860120e78397",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "cacde846-fb61-4075-a42b-3884f45ae9e1",
+      "method": "get",
+      "endpoint": "market/quote",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"price\":{{float 140 180}},\"ts\":{{now 'unix'}}}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "bdf85968-84b1-48f8-bd76-22323381f16e",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "733a2ff3-86e3-45ae-b00b-907deb5a6942",
+      "method": "get",
+      "endpoint": "market/indicators",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"rsi\":{{float 25 75}},\"ema12\":{{float 140 175}},\"ema26\":{{float 138 172}},\"macd\":{{float -2 2}},\"bb_upper\":{{float 175 190}},\"bb_lower\":{{float 130 150}}}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "561c91e4-d655-48fa-bd6a-880a7c7ded65",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "348cfd00-7b5b-4ad8-bb12-91ae3ce2af1c",
+      "method": "get",
+      "endpoint": "news/headlines",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"headlines\":[{\"title\":\"{{queryParam 'ticker'}} beats earnings expectations\",\"published_at\":{{now 'unix'}}},{\"title\":\"Analyst upgrades {{queryParam 'ticker'}} to Buy\",\"published_at\":{{now 'unix'}}}]}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "cb9aff67-4394-4dfa-9ccc-ae5fe00b74e5",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "cf890163-c0d4-40bb-b74c-57eb839f00a1",
+      "method": "get",
+      "endpoint": "news/sentiment",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"ticker\":\"{{queryParam 'ticker'}}\",\"score\":{{float -0.5 0.7}},\"rationale\":\"Recent coverage shows mixed-to-positive sentiment\"}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "7ad26ff1-b1a4-4530-ba81-ba4f53f1395b",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "b9ed1584-4b4f-4bce-a9b8-fa3b908433a1",
+      "method": "post",
+      "endpoint": "broker/orders",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"orderId\":\"ord-{{shuffle 'a' 'b' 'c'}}{{int 1000 9999}}\",\"status\":\"filled\",\"filledQty\":{{body 'qty' 1}},\"avgPrice\":{{float 140 180}}}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "51bbe8f2-5304-4a0d-a9e2-e82ed692cb09",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "6205d8bf-f952-40d9-ad5e-46a0486b405b",
+      "method": "post",
+      "endpoint": "db/trades",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"stored\":true}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "b0db172e-5c80-466b-bbe7-e866d58fcf60",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "2ae61db7-3db9-4d5b-97e6-dea4cd05aab4",
+      "method": "post",
+      "endpoint": "db/strategy",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"stored\":true}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "c1820063-a5a1-4191-84a7-7139b177d4cd",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    },
+    {
+      "uuid": "854f6ed7-e747-4eaf-88f0-b0072795bab6",
+      "method": "post",
+      "endpoint": "db/audit",
+      "responses": [
+        {
+          "statusCode": 200,
+          "body": "{\"stored\":true}",
+          "headers": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "uuid": "6cf39ec9-8aa4-4b70-b91f-662756a5b3f4",
+          "latency": 0,
+          "label": "",
+          "bodyType": "INLINE",
+          "filePath": "",
+          "databucketID": "",
+          "sendFileAsBody": false,
+          "rules": [],
+          "rulesOperator": "OR",
+          "disableTemplating": false,
+          "fallbackTo404": false,
+          "default": false,
+          "crudKey": "id",
+          "callbacks": []
+        }
+      ],
+      "type": "http",
+      "documentation": "",
+      "responseMode": null,
+      "streamingMode": null,
+      "streamingInterval": 0
+    }
+  ],
+  "rootChildren": [
+    {
+      "type": "route",
+      "uuid": "95c8b88c-d85b-4200-9ec3-94ff7f8584c8"
+    },
+    {
+      "type": "route",
+      "uuid": "cacde846-fb61-4075-a42b-3884f45ae9e1"
+    },
+    {
+      "type": "route",
+      "uuid": "733a2ff3-86e3-45ae-b00b-907deb5a6942"
+    },
+    {
+      "type": "route",
+      "uuid": "348cfd00-7b5b-4ad8-bb12-91ae3ce2af1c"
+    },
+    {
+      "type": "route",
+      "uuid": "cf890163-c0d4-40bb-b74c-57eb839f00a1"
+    },
+    {
+      "type": "route",
+      "uuid": "b9ed1584-4b4f-4bce-a9b8-fa3b908433a1"
+    },
+    {
+      "type": "route",
+      "uuid": "6205d8bf-f952-40d9-ad5e-46a0486b405b"
+    },
+    {
+      "type": "route",
+      "uuid": "2ae61db7-3db9-4d5b-97e6-dea4cd05aab4"
+    },
+    {
+      "type": "route",
+      "uuid": "854f6ed7-e747-4eaf-88f0-b0072795bab6"
+    }
+  ],
+  "folders": [],
+  "proxyMode": false,
+  "proxyHost": "",
+  "proxyRemovePrefix": false,
+  "tlsOptions": {
+    "enabled": false,
+    "type": "CERT",
+    "pfxPath": "",
+    "certPath": "",
+    "keyPath": "",
+    "caPath": "",
+    "passphrase": ""
+  },
+  "cors": true,
+  "headers": [],
+  "proxyReqHeaders": [],
+  "proxyResHeaders": [],
+  "data": [],
+  "callbacks": []
+}
