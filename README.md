@@ -1,10 +1,9 @@
 # Temporal: The Durable Operating System for Agentic AI
 
-> Stage demo for a large AI event. Built with the **Durable Harness Pattern** —
-> Temporal as the OS layer underneath an autonomous OpenAI-Agents-SDK trading agent.
+> Demo to showcase Temporal as the Durable OS layer for Agentic AI underneath an autonomous OpenAI-Agents-SDK trading agent.
 
 An autonomous stock-trading agent that:
-1. **Discovers** a strategy by fanning out N parallel sandboxed backtests
+1. **Discovers** a strategy by fanning out N parallel sandboxed backtests within airgapped Dockers
 2. **Lives** through a tick loop with market + news context, LLM trade-intent (OpenAI Agents SDK), deterministic risk guardrail, and human-in-the-loop approval for big trades
 3. **Survives** chaos — kill the worker mid-trade and Temporal replays the agent's decision history to resume from the exact line
 
@@ -19,25 +18,22 @@ Temporal provides the durable OS layer: autosave (workflow state = event history
 
 ## Architecture at a glance
 
-```
-┌────────────┐    ┌──────────────┐    ┌──────────────────────────┐
-│  React UI  │◄──►│   FastAPI    │◄──►│ Temporal Server (on host)│
-│ (Vite +    │REST│ (sole Temp.  │gRPC│ `temporal server         │
-│  Tailwind) │SSE │  client)     │    │  start-dev`              │
-└────────────┘    └──────┬───────┘    └─────────┬────────────────┘
-                         │                      │ poll
-                  ┌──────▼───────┐    ┌─────────▼────────────────┐
-                  │   SQLite     │    │   Temporal Worker        │
-                  │ (run reg.,   │    │   workflows + activities │
-                  │  idempotency)│    │   + OpenAIAgentsPlugin   │
-                  └──────────────┘    └──┬───────────────────┬───┘
-                                         │ HTTP         docker.sock
-                              ┌──────────▼─────┐  ┌────────▼────────────┐
-                              │ Mockoon (host) │  │ Sandbox containers  │
-                              │ market/news/   │  │ (TA-Lib + pandas;   │
-                              │ broker/db      │  │  spawned per        │
-                              └────────────────┘  │  backtest)          │
-                                                  └─────────────────────┘
+```mermaid
+graph TD
+    UI["React UI<br/>(Vite + Tailwind)"]
+    API["FastAPI<br/>(sole Temporal client)"]
+    SQLITE[("SQLite<br/>run registry, idempotency")]
+    TS["Temporal Service<br/>local host: <code>temporal server start-dev</code><br/>or Temporal Cloud namespace"]
+    W["Temporal Worker<br/>workflows + activities<br/>+ OpenAIAgentsPlugin"]
+    MOCK["Mockoon (host)<br/>market / news / broker / db"]
+    SBX["Sandbox containers<br/>(TA-Lib + pandas;<br/>spawned per backtest)"]
+
+    UI <-->|REST / SSE| API
+    API <-->|gRPC| TS
+    API --> SQLITE
+    TS -->|poll| W
+    W -->|HTTP| MOCK
+    W -->|docker.sock| SBX
 ```
 
 | Layer | Tech |
@@ -56,7 +52,11 @@ Temporal provides the durable OS layer: autosave (workflow state = event history
 
 These run on your Mac/host, not inside Docker. **Compose only contains FastAPI + worker + frontend.**
 
-### 1. Temporal server (locally on host)
+### 1. Temporal Service — pick one
+
+The FastAPI client and the worker both connect to a Temporal Service. You can point them at a local dev server **or** Temporal Cloud.
+
+#### Option A — Local dev server (default)
 
 Install the Temporal CLI: https://docs.temporal.io/cli — then start it:
 
@@ -68,6 +68,22 @@ temporal server start-dev --ip 0.0.0.0
 - Web UI: `:8233`
 
 > `--ip 0.0.0.0` is required so Docker containers can reach it via `host.docker.internal:7233`. Without it, Temporal binds to `127.0.0.1` only and the worker container will fail with `NetworkUnreachable`.
+
+#### Option B — Temporal Cloud
+
+To point at a Cloud namespace instead, override the address + namespace in `.env`:
+
+```bash
+TEMPORAL_ADDRESS=<your-namespace>.<account>.tmprl.cloud:7233
+TEMPORAL_NAMESPACE=<your-namespace>.<account>
+```
+
+You'll also need to enable TLS + an auth credential on the two `Client.connect(...)` call sites — [`backend/fastapi_app/temporal_client.py`](backend/fastapi_app/temporal_client.py) and [`backend/worker/main.py`](backend/worker/main.py). Either:
+
+- **API key** (simpler): `tls=True, api_key="<your-key>"` — get one from the Cloud UI → API Keys.
+- **mTLS cert** (per-namespace): `tls=TLSConfig(client_cert=..., client_private_key=...)` — see [Temporal Cloud mTLS docs](https://docs.temporal.io/cloud/certificates).
+
+Skip the `start-dev` step entirely. The Temporal Web UI link in [`MissionControl.tsx:42`](frontend/src/components/MissionControl.tsx#L42) (which hardcodes `localhost:8233`) won't apply — open your workflow in the Cloud UI instead.
 
 ### 2. Mockoon (on host)
 
@@ -278,7 +294,7 @@ curl -s http://localhost:8000/api/runs/ | jq
 
 ## License & credits
 
-Built as a stage demo to showcase the **Durable Harness Pattern** for the AI event circuit. Inspiration drawn from:
+Inspiration drawn from:
 - [temporal-community/temporal-ai-agent](https://github.com/temporal-community/temporal-ai-agent)
 - [temporal-community/openai-agents-demos](https://github.com/temporal-community/openai-agents-demos)
 - [Temporal blog: Introducing Temporal and Agentic Sandboxes for the OpenAI Agents SDK](https://temporal.io/blog/introducing-temporal-and-agentic-sandboxes-openai-agents-sdk)
