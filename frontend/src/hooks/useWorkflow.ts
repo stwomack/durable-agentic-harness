@@ -69,10 +69,18 @@ export function useWorkflow(events: UIEvent[]) {
       }
     }
 
-    const pendingApproval = approvals.find(
-      (a) => !trades[a.trade_id]?.order && trades[a.trade_id]?.risk?.decision === "allow_requires_approval",
-    );
-
-    return { phase, scorecards, winningStrategy, winningScorecard, ticks, trades, pendingApproval };
+    return { phase, scorecards, winningStrategy, winningScorecard, ticks, trades, approvals };
   }, [events]);
+}
+
+export function findPendingApproval(
+  approvals: ApprovalReq[],
+  trades: Record<string, Trade>,
+  dismissed: Set<string>,
+): ApprovalReq | undefined {
+  return approvals.find(
+    (a) => !dismissed.has(a.trade_id) &&
+           !trades[a.trade_id]?.order &&
+           trades[a.trade_id]?.risk?.decision === "allow_requires_approval",
+  );
 }

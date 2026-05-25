@@ -201,6 +201,10 @@ class SelfEvolvingStockAgentWorkflow:
 
             market, news = await self._fetch_context(inp.ticker)
             intent = await self._run_trade_agent(market, news)
+            # Stamp a deterministic, workflow-controlled id so the UI can identify each
+            # tick's intent uniquely. The LLM picks intent.id otherwise and tends to repeat
+            # values across ticks, which shadows newer approval requests in the UI.
+            intent.id = f"{workflow.info().workflow_id}-t{self.tick_count}"
             await self._emit("trade_intent", {
                 "tick": self.tick_count, "intent": intent.model_dump(),
                 "price": market.price, "sentiment": news.sentiment,

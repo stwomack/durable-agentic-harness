@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MissionControl } from "./components/MissionControl";
 import { EventLog } from "./components/EventLog";
 import { WarRoom } from "./components/WarRoom";
@@ -6,7 +6,7 @@ import { TradingFloor } from "./components/TradingFloor";
 import { ApprovalModal } from "./components/ApprovalModal";
 import { ChaosPanel } from "./components/ChaosPanel";
 import { useSSE } from "./hooks/useSSE";
-import { useWorkflow } from "./hooks/useWorkflow";
+import { useWorkflow, findPendingApproval } from "./hooks/useWorkflow";
 
 export type DurabilityState = "idle" | "down" | "recovered";
 
@@ -38,9 +38,13 @@ export default function App() {
   }, [workflowId]);
   const expected = 8;
   const events = useSSE(workflowId);
-  const { phase, scorecards, winningStrategy, ticks, trades, pendingApproval } = useWorkflow(events);
+  const { phase, scorecards, winningStrategy, ticks, trades, approvals } = useWorkflow(events);
 
-  const showApproval = workflowId && pendingApproval && !dismissedApprovals.has(pendingApproval.trade_id);
+  const pendingApproval = useMemo(
+    () => findPendingApproval(approvals, trades, dismissedApprovals),
+    [approvals, trades, dismissedApprovals],
+  );
+  const showApproval = workflowId && pendingApproval;
 
   return (
     <div className="min-h-screen p-10 max-w-6xl mx-auto space-y-8">
