@@ -109,6 +109,13 @@ class Positions(BaseModel):
 
 
 class TradeIntent(BaseModel):
+    """Structured output schema for the trade-intent Agent.
+
+    Passed as `output_type=TradeIntent` to the `Agent(...)` constructor in
+    parent.py. The OpenAI Agents SDK validates the model's final response
+    against this Pydantic schema, so the workflow receives a typed object —
+    never a raw string or dict needing parse-and-validate boilerplate.
+    """
     id: str
     ticker: str
     action: TradeAction

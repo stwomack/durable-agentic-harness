@@ -19,6 +19,11 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ApplicationError
 
+# Temporal sandboxes workflow modules and blocks imports that touch the
+# filesystem, network, or random state at import time. The OpenAI Agents SDK
+# (`agents`) and the Temporal plugin glue (`openai_agents`) trip those checks
+# during import, so we explicitly mark them as trusted — they're safe to import
+# even though the sandbox can't prove it.
 with workflow.unsafe.imports_passed_through():
     from agents import Agent, Runner
     from temporalio.contrib import openai_agents as temporal_agents
@@ -273,27 +278,42 @@ class SelfEvolvingStockAgentWorkflow:
 
     # ───────────────────────── The OpenAI Agent ─────────────────────────
     async def _run_trade_agent(self, market: MarketSnapshot, news: NewsSnapshot) -> TradeIntent:
-        """The agentic step.
+        """The agentic step — where the OpenAI Agents SDK meets Temporal.
 
-        The OpenAIAgentsPlugin (set on the Worker's client) auto-wraps every LLM call
-        the Agent makes as a Temporal activity — durable across worker crashes, retried
-        per the plugin's policy, fully audited in event history.
+        Three integration points to notice during the walkthrough:
 
-        The Agent has two read-only tools (market + news snapshots, wrapped from the
-        same activities the workflow already uses). All side effects — risk check,
-        approval gate, order placement — stay in workflow code.
+          1. `Agent(...)` is plain OpenAI Agents SDK — no Temporal-specific code.
+             The same constructor you'd use in a standalone script.
+
+          2. `activity_as_tool(...)` is the bridge for tools. The Agent thinks
+             it has a normal function tool, but every invocation actually
+             dispatches a Temporal activity — durable, retried, in event history.
+
+          3. `Runner.run(...)` looks like a normal in-process agent loop, but the
+             OpenAIAgentsPlugin transparently dispatches each LLM call as a
+             Temporal activity. If the worker dies between turn 3 and turn 4,
+             Temporal replays the workflow and only re-dispatches turn 4 —
+             previous turns' LLM responses are recovered from event history.
+
+        `output_type=TradeIntent` makes the SDK enforce a Pydantic schema on the
+        final response, so the workflow never parses raw JSON from the model.
         """
         agent = Agent(
             name="TradeIntentAgent",
             instructions=LIVE_AGENT_PROMPT,
             model=settings.openai_model,
             tools=[
+                # Wrap two Temporal activities as Agent tools. The Agent calls them
+                # like normal functions; under the hood each call becomes a Temporal
+                # activity execution recorded in workflow history.
                 temporal_agents.workflow.activity_as_tool(fetch_market_snapshot, **_T_MEDIUM),
                 temporal_agents.workflow.activity_as_tool(fetch_news_snapshot, **_T_MEDIUM),
             ],
             output_type=TradeIntent,
         )
         input_msg = self._build_agent_input(market, news)
+        # Each LLM turn inside Runner.run is its own Temporal activity, so the
+        # full multi-turn reasoning loop is durable end-to-end.
         result = await Runner.run(agent, input=input_msg, max_turns=20)
         return result.final_output_as(TradeIntent)
 

@@ -15,6 +15,10 @@ logging.getLogger("openai.agents").setLevel(logging.CRITICAL)
 import structlog
 from temporalio.client import Client
 from temporalio.common import RetryPolicy
+# OpenAIAgentsPlugin is the bridge between the OpenAI Agents SDK and Temporal.
+# Once installed on the Client, any `Agent` + `Runner.run(...)` invoked inside
+# workflow code transparently dispatches every LLM call as a Temporal activity —
+# durable, retried, and recorded in the workflow's event history.
 from temporalio.contrib.openai_agents import ModelActivityParameters, OpenAIAgentsPlugin
 from temporalio.contrib.pydantic import pydantic_data_converter
 from temporalio.worker import Worker
@@ -45,6 +49,11 @@ async def main() -> None:
         namespace=settings.temporal_namespace,
         data_converter=pydantic_data_converter,
         plugins=[
+            # `model_params` controls how each LLM call from the Agent is executed
+            # as a Temporal activity: per-call timeout (60s), end-to-end deadline
+            # including retries (180s), and an exponential-backoff retry policy.
+            # Worker crash mid-LLM-call → Temporal replays the workflow and the
+            # plugin re-dispatches only the incomplete LLM call, not the full agent loop.
             OpenAIAgentsPlugin(
                 model_params=ModelActivityParameters(
                     start_to_close_timeout=timedelta(seconds=60),
@@ -67,10 +76,13 @@ async def main() -> None:
         task_queue=settings.temporal_task_queue,
         workflows=[HelloWorkflow, BacktestSandboxWorkflow, SelfEvolvingStockAgentWorkflow],
         activities=[
-            # Tools the trade-intent Agent can call (via `activity_as_tool`):
+            # These two are dual-purpose: the workflow calls them directly each tick
+            # AND the trade-intent Agent gets them as tools (via `activity_as_tool`
+            # in parent.py). Either path produces a normal `ActivityTaskScheduled`
+            # event in workflow history — durable and replayable.
             fetch_market_snapshot,
             fetch_news_snapshot,
-            # Other workflow activities (deterministic, not exposed as tools):
+            # Plain workflow activities — deterministic side effects, not LLM tools.
             run_backtest_in_sandbox,
             persist_strategy,
             write_trade_record,
