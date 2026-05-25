@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { startRun } from "../lib/api";
+import { startRun, terminateRun } from "../lib/api";
 
 const PHASES = ["SYNTHESIZING", "WINNER_SELECTED", "WATCHING", "AWAITING_APPROVAL"];
 
@@ -12,6 +12,7 @@ export function MissionControl({
 }) {
   const [ticker, setTicker] = useState("NVDA");
   const [busy, setBusy] = useState(false);
+  const [terminating, setTerminating] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -40,6 +41,24 @@ export function MissionControl({
           <a href={`http://localhost:8233/namespaces/default/workflows/${workflowId}`}
              target="_blank" rel="noreferrer"
              className="text-xs underline text-accent-violet">View in Temporal UI</a>
+        )}
+        {workflowId && (
+          <button
+            disabled={terminating}
+            onClick={async () => {
+              if (!window.confirm(`Terminate workflow ${workflowId}? This will forcefully stop the run.`)) return;
+              setTerminating(true);
+              try {
+                await terminateRun(workflowId);
+              } catch (e: any) {
+                console.error("terminateRun failed:", e);
+                alert("terminateRun failed: " + (e?.message || String(e)));
+              } finally { setTerminating(false); }
+            }}
+            className="bg-rose-500/20 text-rose-200 hover:bg-rose-500/40 disabled:opacity-40 text-xs font-mono uppercase tracking-wider rounded px-2 py-1 transition-all"
+          >
+            {terminating ? "Terminating..." : "Terminate"}
+          </button>
         )}
       </div>
 

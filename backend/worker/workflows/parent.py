@@ -46,10 +46,10 @@ with workflow.unsafe.imports_passed_through():
 
 
 # ───── Activity execution policies (DRY) ─────
-_RETRY_STANDARD = RetryPolicy(maximum_attempts=5)
+_RETRY_STANDARD = RetryPolicy(maximum_attempts=50)
 _T_SHORT  = dict(start_to_close_timeout=timedelta(seconds=10),  retry_policy=_RETRY_STANDARD)
-_T_MEDIUM = dict(start_to_close_timeout=timedelta(seconds=30),  retry_policy=_RETRY_STANDARD)
-_T_LONG   = dict(start_to_close_timeout=timedelta(seconds=120), retry_policy=RetryPolicy(maximum_attempts=3))
+_T_MEDIUM = dict(start_to_close_timeout=timedelta(seconds=120),  retry_policy=_RETRY_STANDARD)
+_T_LONG   = dict(start_to_close_timeout=timedelta(seconds=500), retry_policy=RetryPolicy(maximum_attempts=3))
 
 
 @dataclass

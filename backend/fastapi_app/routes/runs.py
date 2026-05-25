@@ -26,6 +26,10 @@ class StartRunRequest(BaseModel):
     tick_seconds: int | None = None
 
 
+class TerminateRunRequest(BaseModel):
+    reason: str | None = None
+
+
 @router.post("/hello")
 async def start_hello(req: HelloRequest) -> dict:
     client = await get_temporal_client()
@@ -62,6 +66,18 @@ async def start_run(req: StartRunRequest) -> dict:
 @router.get("/")
 async def runs() -> list[dict]:
     return list_runs()
+
+
+@router.post("/{workflow_id}/terminate")
+async def terminate_run(workflow_id: str, body: TerminateRunRequest | None = None) -> dict:
+    client = await get_temporal_client()
+    handle = client.get_workflow_handle(workflow_id)
+    reason = body.reason if body and body.reason else "terminated from UI"
+    try:
+        await handle.terminate(reason=reason)
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"ok": True, "workflow_id": workflow_id, "reason": reason}
 
 
 @router.get("/{workflow_id}/state")

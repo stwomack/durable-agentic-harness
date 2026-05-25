@@ -15,3 +15,13 @@ export async function getState(workflowId: string) {
   if (!r.ok) throw new Error(await r.text());
   return await r.json();
 }
+
+export async function terminateRun(workflowId: string, reason?: string) {
+  const r = await fetch(`${API}/api/runs/${workflowId}/terminate`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ reason: reason ?? null }),
+  });
+  if (!r.ok) throw new Error(await r.text());
+  return (await r.json()) as { ok: boolean; workflow_id: string; reason: string };
+}
