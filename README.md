@@ -269,7 +269,6 @@ curl -s http://localhost:8000/api/runs/ | jq
 
 ## What's NOT in v1 (deferred)
 
-- **Phase 4 / drift detection / self-evolution loop** — removed for talk-length reasons; the original brainstorm in [`project_description.md`](project_description.md) covers the full design if you want to add it back.
 - **Crash Broker / Restart Broker chaos buttons** — Mockoon runs on the host now (Mockoon Desktop), so the user stops/starts it there directly.
 - **LLM-generated backtest code** — for stage reliability, backtests use deterministic templates per strategy family ([`backtest_template.py`](backend/worker/activities/backtest_template.py)). The script is still shown in the War Room UI; the OpenAI call is just skipped at Phase 1.
 - **Broker MCP server** — `place_order` activity hits Mockoon directly. MCP gateway is a v2 enhancement.

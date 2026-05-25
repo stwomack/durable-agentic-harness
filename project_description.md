@@ -73,15 +73,6 @@ The AI has picked the strategy. Now, the Temporal Workflow "morphs" into a monit
 - **AI Role:** Every hour, the harness feeds current market sentiment (news headlines) + technical data to the LLM.
 - **The Difference:** The LLM might say, *"The technicals say BUY, but I just read a news report about a supply chain strike in China. Abort the trade."*
 
-## **Step 3: Adaptive Execution (The "OS" Phase)**
-
-If the market conditions change drastically, a traditional system breaks. An Agentic OS adapts.
-
-- **Temporal Harness Task:** It detects "Low Performance." If the strategy starts losing money beyond a threshold, Temporal triggers a **"Re-plan Signal."**
-- **AI Role:** The LLM looks at the losses, realizes the "EMA_Cross" isn't working in a sideways market, and **rewrites its own execution logic** for the next cycle.
-
----
-
 ## **Why Temporal is the "Better Recommendation" for this**
 
 You might think, *"Can't I just run a Python script for this?"* You could, but here is why Temporal makes it an **Operating System**:
@@ -171,12 +162,6 @@ This is the blueprint for a **Durable Agentic OS** where **Temporal** is the
 1. **Signal Request:** For any trade over a set $ amount, the Workflow pauses. It sends a message to your phone/Slack.
 2. **State Suspension:** The agent is "frozen" in time. It consumes no CPU while waiting for you.
 3. **Approval:** You send a **Signal** ("Approve"). Temporal immediately resumes the workflow at the next line of code to execute the trade.
-
-## **Phase 4: Self-Correction (The "Evolution")**
-
-1. **Audit & Re-plan:** Once a week, the Workflow analyzes its own live performance.
-2. **Drift Detection:** If the "Live ROI" is 20% lower than the "Backtest ROI," the harness triggers a **Recursive Re-plan**.
-3. **Loop Back:** It goes back to **Phase 1** to discover a new strategy better suited for the *current* market regime.
 
 ---
 

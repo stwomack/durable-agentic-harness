@@ -1,7 +1,7 @@
 # Temporal: The Durable Operating System for Agentic AI — Demo Design
 
 **Date:** 2026-05-21 (revised 2026-05-22 to simplify scope)
-**Status:** Approved (v2: drift / Phase-4 / broker-chaos removed)
+**Status:** Approved (v2: Phase-4 / broker-chaos removed)
 **Author:** Darshit + Claude (brainstorm)
 **Demo context:** Large-scale AI event; 10–15 minute stage slot.
 
@@ -24,7 +24,7 @@
 - Headline the durability story (kill-worker / resume; pause-for-approval at zero cost)
 - Make Temporal's event history visible (a tab in Temporal Web UI is shown live)
 
-**Non-goals:** real money trading; production-grade security; multi-user auth; persistent multi-day runs; self-evolution / drift-driven re-planning (cut from v1).
+**Non-goals:** real money trading; production-grade security; multi-user auth; persistent multi-day runs.
 
 ---
 
@@ -45,7 +45,7 @@
 | Mockoon runtime | Runs on the host (Mockoon Desktop or `mockoon-cli`); NOT bundled in compose |
 | Stage controls | Kill Worker, Restart Worker, Inject Bad News, Fast Forward (4 buttons) |
 | Control plane | FastAPI is sole Temporal client; UI talks to FastAPI; SSE for live events |
-| **REMOVED in v2** | Phase 4 drift detection, `force_drift` signal, `EVOLVING` phase, Crash/Restart Broker chaos buttons, LLM-generated backtest code |
+| **REMOVED in v2** | Crash/Restart Broker chaos buttons, LLM-generated backtest code |
 
 ---
 
@@ -121,7 +121,6 @@ class AgentInput(BaseModel):
     limits: TradeLimits                # max_notional, max_position_pct, etc.
     approval_threshold: float          # dollar value above which approval required
     tick_seconds: int = 10
-    drift_threshold: float = 0.20      # 20% live-ROI vs backtest-ROI gap → re-plan
 ```
 
 **Durable state (kept in Workflow Event History):**
@@ -134,7 +133,7 @@ class AgentInput(BaseModel):
 - `inject_news(headline: str, sentiment: float)` — chaos: push fake news into next tick
 - `stop()` — graceful shutdown
 
-> **v2 simplification:** `force_drift` signal, `drift_threshold` input field, and the `EVOLVING` phase enum value are unused in v1. The workflow exits cleanly after Phase 2+3 instead of looping back to Phase 1.
+> The workflow exits cleanly after Phase 2+3 instead of looping back to Phase 1.
 
 **Queries:**
 - `get_state() -> StateSnapshot` — full current state for UI hydration
@@ -185,8 +184,7 @@ class SelfEvolvingStockAgentWorkflow:
 
             # ───── PHASE 2 + 3: WATCHING / AWAITING_APPROVAL ─────
             self.state.phase = Phase.WATCHING
-            drift_detected = False
-            while not drift_detected:
+            while True:
                 # Sleep or be woken by chaos signal
                 try:
                     await workflow.wait_condition(
@@ -261,7 +259,6 @@ class SelfEvolvingStockAgentWorkflow:
                 )
                 self.state.positions.apply(order)
             # v1: workflow exits cleanly when self._stop is signalled.
-            # (Phase 4 drift detection and re-synthesis loop-back are deferred.)
 ```
 
 ### 4.4 Determinism guarantees
@@ -289,8 +286,6 @@ All activities live in `backend/worker/activities/`. All accept Pydantic inputs,
 | `place_order` | intent, idempotency_key | `OrderResult` | max 5 | Mockoon `POST /broker/orders`; idempotency on header `X-Idempotency-Key` |
 | `write_trade_record` | order_result | `ok` | max 5 | Mockoon `POST /db/trades` |
 | `persist_strategy` | winning_strategy | `ok` | max 5 | Mockoon `POST /db/strategy` |
-
-> **v2 simplification:** `check_drift` activity is dropped from v1.
 
 ---
 
@@ -324,7 +319,7 @@ Failure semantics:
 | Method | Path | Returns / behaviour |
 |---|---|---|
 | GET | `/market/prices?ticker=X&range=3y` | OHLCV array fixture per ticker (NVDA, AAPL, TSLA seeded) |
-| GET | `/market/quote?ticker=X` | `{price, ts}` — price drifts with templated random walk per call |
+| GET | `/market/quote?ticker=X` | `{price, ts}` — price moves with templated random walk per call |
 | GET | `/market/indicators?ticker=X` | `{rsi, ema12, ema26, macd, bb_upper, bb_lower}` |
 | GET | `/news/headlines?ticker=X` | Rotating headlines from a curated list |
 | GET | `/news/sentiment?ticker=X` | `{score: -1..1, rationale}` — chaos panel can override |
@@ -503,6 +498,5 @@ durable-agentic-harness/
 - Persistent run history beyond SQLite reset on compose-down
 - Slack / Telegram approval (env-toggle could be added in v2)
 - Broker MCP server (kept in `project_description.md` as v2 enhancement)
-- **Phase 4 self-evolution / drift detection** — the "drift triggers re-discovery" loop is deferred. Activities, signal, phase enum value, UI button, and stage moment all removed.
 - **Chaos buttons: Crash Broker / Restart Broker** — Mockoon runs on the host now, so stopping/starting it happens in Mockoon Desktop directly.
 - **LLM-generated backtest code** — replaced by deterministic `backtest_template.build_backtest_code(...)` for stage reliability. We still execute in a sandbox and display the code in the UI, just don't call OpenAI per backtest.

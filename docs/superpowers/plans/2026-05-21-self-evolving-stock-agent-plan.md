@@ -16,8 +16,6 @@ After end-to-end implementation, the demo scope was tightened. The following ite
 
 | Cut item | Where it appears in this plan | Replacement |
 |---|---|---|
-| Phase 4 drift detection + re-evolution loop | Task 31 (`check_drift` activity), Task 32 (drift loop-back in parent) | Workflow exits cleanly after Phase 2+3. `check_drift` activity removed. Phase-4 stage moment removed from §9 of the spec. |
-| `force_drift` signal | Inside Task 26 (parent signals) and Task 34 (chaos route) and Task 35 (button) | Removed everywhere. |
 | `Crash Broker` / `Restart Broker` chaos buttons | Task 33 (chaos backend) and Task 34 (chaos routes) and Task 35 (panel UI) | Mockoon runs on host via Mockoon Desktop — user stops/starts it there. The two routes and buttons are removed. |
 | LLM-generated backtest code (OpenAI Agents SDK SandboxAgent) | Task 13 (`run_backtest_in_sandbox`) | Replaced by deterministic `backtest_template.build_backtest_code(strategy_spec, data_path)` per family (RSI/MACD/EMA/Bollinger/Mean-Reversion). Sandbox still runs the script in Docker. |
 | Compose-bundled Temporal + Mockoon | Task 8 (`docker-compose.yml`) | Both moved to host. Compose only has `fastapi`, `worker`, `frontend`. Containers reach the host via `host.docker.internal`. |
@@ -32,7 +30,7 @@ After end-to-end implementation, the demo scope was tightened. The following ite
 | **A — Foundation** | 1–10 | `docker compose up` succeeds; "hello" workflow runs end-to-end from FastAPI; frontend boots |
 | **B — Phase 1: War Room** | 11–21 | Submit ticker → N parallel deterministic backtests → winner highlighted in UI |
 | **C — Phase 2+3: Trading Floor** | 22–30 | Live loop ticks → intents → risk check → approval modal → broker order |
-| **D — Chaos** | 33–36 (drift tasks 31–32 cut) | Chaos panel kills/restarts worker mid-trade with Temporal recovery; Inject Bad News blocks; Fast Forward paces |
+| **D — Chaos** | 33–36 | Chaos panel kills/restarts worker mid-trade with Temporal recovery; Inject Bad News blocks; Fast Forward paces |
 
 ---
 
@@ -101,11 +99,10 @@ durable-agentic-harness/
 │   │       ├── backtest.py              Task 13
 │   │       ├── llm.py                   Task 23
 │   │       ├── risk.py                  Task 24
-│   │       ├── broker.py                Task 25
-│   │       └── drift.py                 Task 31
+│   │       └── broker.py                Task 25
 │   └── tests/
 │       ├── conftest.py                  Task 4
-│       ├── unit/{test_risk,test_drift,test_select_winner,test_models}.py
+│       ├── unit/{test_risk,test_select_winner,test_models}.py
 │       ├── workflows/{test_parent_replay,test_backtest_replay}.py
 │       └── e2e/test_smoke.py
 ├── mockoon/
@@ -167,7 +164,6 @@ TEMPORAL_NAMESPACE=default
 TEMPORAL_TASK_QUEUE=stock-agent
 DATA_MODE=mock
 TICK_SECONDS=10
-DRIFT_THRESHOLD=0.20
 APPROVAL_THRESHOLD_USD=10000
 NUM_SANDBOXES=8
 MOCKOON_BASE_URL=http://mockoon:3001
@@ -463,7 +459,6 @@ class Settings(BaseSettings):
 
     data_mode: str = Field("mock", alias="DATA_MODE")  # "mock" | "live"
     tick_seconds: int = Field(10, alias="TICK_SECONDS")
-    drift_threshold: float = Field(0.20, alias="DRIFT_THRESHOLD")
     approval_threshold_usd: float = Field(10000.0, alias="APPROVAL_THRESHOLD_USD")
     num_sandboxes: int = Field(8, alias="NUM_SANDBOXES")
 
@@ -489,7 +484,6 @@ class Phase(str, Enum):
     SYNTHESIZING = "SYNTHESIZING"
     WATCHING = "WATCHING"
     AWAITING_APPROVAL = "AWAITING_APPROVAL"
-    EVOLVING = "EVOLVING"
 
 
 class RiskDecision(str, Enum):
@@ -505,7 +499,6 @@ class TradeAction(str, Enum):
 
 
 RESTRICTED_NEWS_TERMS = ("fraud", "sec probe", "bankruptcy", "trading halt", "delisting")
-DRIFT_CHECK_TICK_INTERVAL = 5  # check drift every K ticks
 ```
 
 - [ ] **Step 4: Create `backend/shared/models.py`**
@@ -541,7 +534,6 @@ class AgentInput(BaseModel):
     limits: TradeLimits = Field(default_factory=TradeLimits)
     approval_threshold: float = 10_000.0
     tick_seconds: int = 10
-    drift_threshold: float = 0.20
 
 
 class HistoricalDataRef(BaseModel):
@@ -654,18 +646,6 @@ class OrderResult(BaseModel):
     avg_price: float
 
 
-class DriftInput(BaseModel):
-    baseline_sharpe: float
-    live_roi: float
-    backtest_roi: float
-    threshold: float
-
-
-class DriftResult(BaseModel):
-    drifted: bool
-    reason: str
-
-
 class AuditEvent(BaseModel):
     ts: datetime
     kind: str
@@ -683,7 +663,7 @@ class ApprovalRequest(BaseModel):
 class UIEvent(BaseModel):
     ts: datetime
     workflow_id: str
-    kind: str  # phase_change, backtest_progress, trade_intent, risk_decision, approval_request, order_placed, chaos, drift_detected, audit
+    kind: str  # phase_change, backtest_progress, trade_intent, risk_decision, approval_request, order_placed, chaos, audit
     payload: dict
 ```
 
@@ -2153,7 +2133,6 @@ async def start_run(req: StartRunRequest) -> dict:
         candidate_strategies=default_candidate_strategies(n),
         approval_threshold=settings.approval_threshold_usd,
         tick_seconds=req.tick_seconds or settings.tick_seconds,
-        drift_threshold=settings.drift_threshold,
     )
     workflow_id = f"agent-{req.ticker.upper()}-{uuid.uuid4().hex[:8]}"
     client = await get_temporal_client()
@@ -2296,7 +2275,7 @@ git commit -m "feat(fastapi): add in-process event bus + SSE + internal events e
 - [ ] **Step 1: Create `frontend/src/types.ts`**
 
 ```ts
-export type Phase = "SYNTHESIZING" | "WATCHING" | "AWAITING_APPROVAL" | "EVOLVING";
+export type Phase = "SYNTHESIZING" | "WATCHING" | "AWAITING_APPROVAL";
 
 export type StrategySpec = {
   id: string;
@@ -2376,7 +2355,7 @@ export function useSSE(workflowId: string | null) {
       } catch {}
     };
     ["phase_change", "backtest_progress", "trade_intent", "risk_decision",
-     "approval_request", "order_placed", "drift_detected", "audit", "chaos"]
+     "approval_request", "order_placed", "audit", "chaos"]
       .forEach((k) => es.addEventListener(k, handler));
     return () => es.close();
   }, [workflowId]);
@@ -2450,7 +2429,6 @@ const KIND_COLORS: Record<string, string> = {
   risk_decision: "text-orange-300",
   approval_request: "text-yellow-300",
   order_placed: "text-emerald-300",
-  drift_detected: "text-rose-300",
   chaos: "text-pink-400",
   audit: "text-foreground/60",
 };
@@ -2477,7 +2455,7 @@ export function EventLog({ events }: { events: UIEvent[] }) {
 import { useState } from "react";
 import { startRun } from "../lib/api";
 
-const PHASES = ["SYNTHESIZING", "WINNER_SELECTED", "WATCHING", "AWAITING_APPROVAL", "EVOLVING"];
+const PHASES = ["SYNTHESIZING", "WINNER_SELECTED", "WATCHING", "AWAITING_APPROVAL"];
 
 export function MissionControl({
   workflowId, onStart, currentPhase,
@@ -3129,7 +3107,6 @@ class SelfEvolvingStockAgentWorkflow:
         self._injected_sentiment_override: Optional[float] = None
         self._fast_forward: bool = False
         self._stop: bool = False
-        self._force_drift: bool = False
 
     @workflow.signal
     def approve_trade(self, trade_id: str) -> None:
@@ -3147,10 +3124,6 @@ class SelfEvolvingStockAgentWorkflow:
     def inject_news(self, headline: str, sentiment: float) -> None:
         self._injected_news.append(NewsHeadline(title=headline, published_at=0))
         self._injected_sentiment_override = sentiment
-
-    @workflow.signal
-    def force_drift(self) -> None:
-        self._force_drift = True
 
     @workflow.signal
     def stop(self) -> None:
@@ -3171,15 +3144,11 @@ class SelfEvolvingStockAgentWorkflow:
     async def run(self, inp: AgentInput) -> dict:
         wf_id = workflow.info().workflow_id
 
-        while not self._stop:
-            # ───── PHASE 1: SYNTHESIZING ─────
-            await self._run_phase_1(inp, wf_id)
-            if self._stop:
-                break
+        # ───── PHASE 1: SYNTHESIZING ─────
+        await self._run_phase_1(inp, wf_id)
+        if not self._stop:
             # ───── PHASE 2 + 3: WATCHING / AWAITING_APPROVAL ─────
-            drifted = await self._run_phases_2_and_3(inp, wf_id)
-            if not drifted:
-                break  # graceful stop
+            await self._run_phases_2_and_3(inp, wf_id)
         return {"stopped": True}
 
     async def _run_phase_1(self, inp: AgentInput, wf_id: str) -> None:
@@ -3227,28 +3196,22 @@ class SelfEvolvingStockAgentWorkflow:
                           "winning_strategy": winner_spec.model_dump(),
                           "winning_scorecard": winner.model_dump()})
 
-    async def _run_phases_2_and_3(self, inp: AgentInput, wf_id: str) -> bool:
-        """Returns True if drift triggered re-synthesis, False if stop requested."""
+    async def _run_phases_2_and_3(self, inp: AgentInput, wf_id: str) -> None:
+        """Runs the live monitor loop until stop is signalled."""
         self.phase = Phase.WATCHING
         await self._emit(wf_id, "phase_change", {"phase": self.phase.value})
 
         while not self._stop:
             try:
                 await workflow.wait_condition(
-                    lambda: self._fast_forward or self._stop or self._force_drift,
+                    lambda: self._fast_forward or self._stop,
                     timeout=timedelta(seconds=inp.tick_seconds),
                 )
             except TimeoutError:
                 pass
             self._fast_forward = False
             if self._stop:
-                return False
-            if self._force_drift:
-                self._force_drift = False
-                await self._emit(wf_id, "drift_detected", {"reason": "forced by chaos"})
-                self.phase = Phase.EVOLVING
-                await self._emit(wf_id, "phase_change", {"phase": self.phase.value})
-                return True
+                return
 
             self.tick_count += 1
             market = await workflow.execute_activity(
@@ -3734,127 +3697,7 @@ git commit --allow-empty -m "milestone: Phase C (Trading Floor) complete"
 
 ---
 
-# PHASE D — Phase 4 + Chaos (Tasks 31–36)
-
-## Task 31: `check_drift` activity (TDD)
-
-**Files:**
-- Create: `backend/worker/activities/drift.py`
-- Create: `backend/tests/unit/test_drift.py`
-
-- [ ] **Step 1: Create `backend/tests/unit/test_drift.py`**
-
-```python
-from shared.models import DriftInput
-from worker.activities.drift import _check_drift_pure
-
-
-def test_no_drift_when_close():
-    res = _check_drift_pure(DriftInput(baseline_sharpe=1.5, live_roi=0.18, backtest_roi=0.20, threshold=0.20))
-    assert res.drifted is False
-
-
-def test_drift_when_live_roi_lags():
-    res = _check_drift_pure(DriftInput(baseline_sharpe=1.5, live_roi=0.10, backtest_roi=0.30, threshold=0.20))
-    assert res.drifted is True
-    assert "lag" in res.reason.lower() or "drift" in res.reason.lower()
-```
-
-- [ ] **Step 2: Create `backend/worker/activities/drift.py`**
-
-```python
-from temporalio import activity
-
-from shared.models import DriftInput, DriftResult
-
-
-def _check_drift_pure(inp: DriftInput) -> DriftResult:
-    if inp.backtest_roi <= 0:
-        return DriftResult(drifted=False, reason="no backtest ROI baseline")
-    gap = (inp.backtest_roi - inp.live_roi) / abs(inp.backtest_roi)
-    if gap > inp.threshold:
-        return DriftResult(drifted=True,
-                           reason=f"live ROI lags backtest by {gap*100:.0f}% (threshold {inp.threshold*100:.0f}%)")
-    return DriftResult(drifted=False, reason=f"within tolerance ({gap*100:.0f}%)")
-
-
-@activity.defn
-async def check_drift(inp: DriftInput) -> DriftResult:
-    return _check_drift_pure(inp)
-```
-
-- [ ] **Step 3: Run tests — expect pass**
-
-```bash
-cd backend && pytest tests/unit/test_drift.py -v
-```
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add backend/worker/activities/drift.py backend/tests/unit/test_drift.py
-git commit -m "feat(activities): add check_drift with ratio-vs-baseline rule"
-```
-
----
-
-## Task 32: Drift loop-back in parent workflow
-
-**Files:**
-- Modify: `backend/worker/workflows/parent.py`
-- Modify: `backend/worker/main.py`
-
-- [ ] **Step 1: Add drift check inside the live loop in `parent.py`**
-
-After the `order_placed` emit and `self.live_roi` update, add:
-
-```python
-            # ───── PHASE 4 drift check ─────
-            from shared.constants import DRIFT_CHECK_TICK_INTERVAL
-            from worker.activities.drift import check_drift  # noqa: imported above too
-            from shared.models import DriftInput
-            if self.tick_count % DRIFT_CHECK_TICK_INTERVAL == 0:
-                baseline_roi = next(
-                    (s.roi for s in self.scorecards if s.strategy_id == self.winning_strategy.id),
-                    0.0,
-                )
-                drift = await workflow.execute_activity(
-                    check_drift,
-                    DriftInput(baseline_sharpe=0.0, live_roi=self.live_roi,
-                               backtest_roi=baseline_roi, threshold=inp.drift_threshold),
-                    start_to_close_timeout=timedelta(seconds=5),
-                )
-                if drift.drifted:
-                    await self._emit(wf_id, "drift_detected", {"reason": drift.reason})
-                    self.phase = Phase.EVOLVING
-                    await self._emit(wf_id, "phase_change", {"phase": self.phase.value})
-                    return True
-```
-
-Also add `check_drift` to the top-level imports inside `workflow.unsafe.imports_passed_through()`:
-
-```python
-    from worker.activities.drift import check_drift
-```
-
-- [ ] **Step 2: Register `check_drift` in `backend/worker/main.py`**
-
-```python
-from worker.activities.drift import check_drift
-# ...
-activities=[
-    ..., check_drift,
-],
-```
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add backend/worker/workflows/parent.py backend/worker/main.py
-git commit -m "feat(workflows): add Phase 4 drift detection + re-synthesis loop-back"
-```
-
----
+# PHASE D — Chaos (Tasks 33–36)
 
 ## Task 33: FastAPI chaos backend (docker.sock)
 
@@ -3992,15 +3835,6 @@ async def inject_news(body: InjectNewsBody) -> dict:
     await h.signal("inject_news", body.headline, body.sentiment)
     log_chaos(body.workflow_id, "inject_news", body.model_dump())
     return {"ok": True}
-
-
-@router.post("/force_drift")
-async def force_drift(body: WorkflowChaos) -> dict:
-    client = await get_temporal_client()
-    h = client.get_workflow_handle(body.workflow_id)
-    await h.signal("force_drift")
-    log_chaos(body.workflow_id, "force_drift", {})
-    return {"ok": True}
 ```
 
 - [ ] **Step 2: Mount the router in `backend/fastapi_app/main.py`**
@@ -4036,7 +3870,7 @@ Update the `fastapi` service:
 
 ```bash
 git add backend/fastapi_app/routes/chaos.py backend/fastapi_app/main.py docker-compose.yml
-git commit -m "feat(fastapi): add chaos routes (kill/restart worker, fast-forward, inject_news, force_drift)"
+git commit -m "feat(fastapi): add chaos routes (kill/restart worker, fast-forward, inject_news)"
 ```
 
 ---
@@ -4064,7 +3898,6 @@ export function useChaos(workflowId: string | null) {
     crashBroker: () => call("crash_broker"),
     restartBroker: () => call("restart_broker"),
     fastForward: () => workflowId && call("fast_forward", { workflow_id: workflowId }),
-    forceDrift: () => workflowId && call("force_drift", { workflow_id: workflowId }),
     injectBadNews: () =>
       workflowId &&
       call("inject_news", {
@@ -4103,7 +3936,6 @@ export function ChaosPanel({ workflowId }: { workflowId: string | null }) {
       <Btn label="Restart Broker"  onClick={c.restartBroker} variant="info" />
       <Btn label="Inject Bad News" onClick={c.injectBadNews} variant="warn" />
       <Btn label="Fast Forward"    onClick={c.fastForward}   variant="info" />
-      <Btn label="Force Drift"     onClick={c.forceDrift}    variant="warn" />
     </div>
   );
 }
@@ -4117,7 +3949,7 @@ Add `<ChaosPanel workflowId={workflowId} />` inside the main `<div>`, alongside 
 
 ```bash
 git add frontend/src/hooks/useChaos.ts frontend/src/components/ChaosPanel.tsx frontend/src/App.tsx
-git commit -m "feat(frontend): add Chaos Panel (kill/restart/inject/fast-forward/drift)"
+git commit -m "feat(frontend): add Chaos Panel (kill/restart/inject/fast-forward)"
 ```
 
 ---
@@ -4140,8 +3972,6 @@ Walk through:
 5. Wait a few ticks for fresh news → approval modal pops → Approve
 6. Click `Kill Worker` mid-loop
 7. Wait ~5 seconds → click `Restart Worker` → workflow resumes (visible in Temporal UI history)
-8. Click `Force Drift` → Phase badge → EVOLVING → new fan-out cycle starts
-9. Wait for new winner + resumed live loop
 
 - [ ] **Step 3: Smoke test workflows still complete**
 
@@ -4156,7 +3986,7 @@ Expected: hello smoke still passes (it's a sanity gate, not a full demo test).
 ```bash
 docker compose down
 git tag phase-d-complete
-git commit --allow-empty -m "milestone: Phase D (Evolution + Chaos) complete — demo-ready"
+git commit --allow-empty -m "milestone: Phase D (Chaos) complete — demo-ready"
 ```
 
 **🎉 ALL PHASES COMPLETE — full stage-ready demo.**
@@ -4169,14 +3999,14 @@ git commit --allow-empty -m "milestone: Phase D (Evolution + Chaos) complete —
 - §1 Goal — Phase A→D produces the demo
 - §2 Decisions — every locked decision has a corresponding task (data mode switch: Task 12/22; tick: Task 26; chaos: Tasks 33–35)
 - §3 Architecture — Tasks 1–8 build all 6 containers
-- §4 Workflows — Tasks 14 (child), 15 (parent Phase 1), 26 (Phase 2+3), 32 (Phase 4)
-- §5 Activities — Tasks 11 (persist/ui), 12 (history), 13 (backtest), 22 (market/news), 23 (LLM), 24 (risk), 25 (broker), 31 (drift)
+- §4 Workflows — Tasks 14 (child), 15 (parent Phase 1), 26 (Phase 2+3)
+- §5 Activities — Tasks 11 (persist/ui), 12 (history), 13 (backtest), 22 (market/news), 23 (LLM), 24 (risk), 25 (broker)
 - §6 Sandbox bridge — Task 13 (with implementation note about API uncertainty)
 - §7 Data layer — Tasks 2 (Mockoon), 7 (SQLite), 17 (SSE bus)
 - §8 Frontend — Tasks 9 (scaffold), 18 (api/hooks), 19 (Mission Control), 20 (War Room), 28 (Trading Floor), 29 (Approval), 35 (Chaos)
 - §9 Stage script — Task 36 rehearsal
 - §10 Project structure — covered file-by-file in File Structure section
-- §11 Testing/observability — Tasks 10, 15, 24, 31 add unit/e2e tests
+- §11 Testing/observability — Tasks 10, 15, 24 add unit/e2e tests
 - §12 Risks — acknowledged in task notes (sandbox SDK uncertainty in Task 13)
 
 **Placeholder scan:** none found.
@@ -4184,7 +4014,6 @@ git commit --allow-empty -m "milestone: Phase D (Evolution + Chaos) complete —
 **Type consistency:** `Scorecard`, `TradeIntent`, `OrderResult`, `Phase`, `RiskDecision`, `TradeAction` consistent across tasks 4/14/15/24/26.
 
 **Known small gaps fixed inline:**
-- Task 26 imports `check_drift` only inside Task 32 (drift activity didn't exist yet at Task 26). Task 32 documents adding the import in workflow.unsafe block at that time.
 - `OrderResult.side` is typed `Literal["BUY", "SELL"]`. Task 25's `place_order` uses `inp.intent.action.value` which is `"BUY"`/`"SELL"` from `TradeAction` enum — consistent.
 
 ---

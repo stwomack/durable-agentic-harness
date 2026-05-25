@@ -188,7 +188,6 @@ TEMPORAL_ADDRESS=temporal:7233           # inside compose; localhost:7233 for ho
 TEMPORAL_NAMESPACE=default
 DATA_MODE=mock                           # or "live"
 TICK_SECONDS=10                          # 15min in prod, 10s for demo
-DRIFT_THRESHOLD=0.20
 APPROVAL_THRESHOLD_USD=10000
 NUM_SANDBOXES=8
 MOCKOON_BASE_URL=http://mockoon:3001
@@ -270,10 +269,9 @@ The original `project_description.md` is the source brainstorm; the design spec 
 - **Approval:** spec uses **in-app React modal**; `project_description.md` mentioned Slack/Telegram. Slack is a v2 toggle.
 - **Tick interval:** spec uses **configurable `TICK_SECONDS` (default 10s)** for stage demo; `project_description.md` mentioned 15 minutes (production).
 - **LLM provider:** spec uses **OpenAI everywhere via the Agents SDK**; `project_description.md` mentioned both Claude and OpenAI. Single SDK story.
-- **Phase 4 (self-evolution / drift detection):** **REMOVED** from v1. The "agent re-discovers its strategy when drift is detected" loop is deferred — the demo arc ends after Phase 2+3 (live monitoring + approval + chaos survival). Drift activity, `force_drift` signal, `EVOLVING` phase, and Phase-4 stage moment are all out.
 - **Sandbox code generation:** **deterministic templates** (hand-written per strategy family) instead of LLM-generated code. We still execute the script in an isolated Docker sandbox and display the code in the War Room, but skip the OpenAI call per backtest for stage reliability. `BACKTEST_PROMPT` is unused; `_generate_backtest_code` was replaced by `build_backtest_code` in `backtest_template.py`.
 - **Mockoon runs on the host**, not in compose. The user starts it via Mockoon Desktop (or `mockoon-cli`) and points the `MOCKOON_BASE_URL` env var to `http://host.docker.internal:3001` for containers. The `crash_broker` / `restart_broker` chaos buttons are therefore **removed** from the UI — the user can stop/start Mockoon Desktop directly if they need that drama.
-- **Chaos panel v1 surface:** `Kill Worker`, `Restart Worker`, `Inject Bad News`, `Fast Forward`. The `Crash Broker`, `Restart Broker`, and `Force Drift` buttons are gone.
+- **Chaos panel v1 surface:** `Kill Worker`, `Restart Worker`, `Inject Bad News`, `Fast Forward`. The `Crash Broker` and `Restart Broker` buttons are gone.
 
 ---
 
@@ -293,7 +291,7 @@ The original `project_description.md` is the source brainstorm; the design spec 
 ## 12. Status
 
 - [x] Brainstorm complete
-- [x] Design spec written and approved (simplified to drop Phase 4 / drift)
+- [x] Design spec written and approved
 - [x] AGENTS.md committed
 - [x] Implementation plan written
 - [x] Scaffold built (compose, FastAPI, worker, frontend, Mockoon fixtures, sandbox image Dockerfile)
@@ -304,6 +302,5 @@ The original `project_description.md` is the source brainstorm; the design spec 
 - [ ] Stage rehearsal pass
 
 **Cut from v1 (post-implementation simplification):**
-- Phase 4: drift detection + re-evolution loop
-- Chaos buttons: Crash Broker, Restart Broker, Force Drift
+- Chaos buttons: Crash Broker, Restart Broker
 - LLM-generated backtest code (replaced by deterministic templates)
