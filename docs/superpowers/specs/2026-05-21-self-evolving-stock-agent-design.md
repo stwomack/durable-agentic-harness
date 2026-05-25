@@ -1,40 +1,51 @@
-# Self-Evolving Stock Agent — Demo Design
+# Temporal: The Durable Operating System for Agentic AI — Demo Design
 
-**Date:** 2026-05-21
-**Status:** Approved
+**Date:** 2026-05-21 (revised 2026-05-22 to simplify scope)
+**Status:** Approved (v2: drift / Phase-4 / broker-chaos removed)
 **Author:** Darshit + Claude (brainstorm)
-**Demo context:** Large-scale AI event; 15+ minute stage slot; "wow" moment is full self-evolution (Phases 1→4 visible on stage)
+**Demo context:** Large-scale AI event; 10–15 minute stage slot.
 
 ---
 
 ## 1. Goal
 
-Build a demo application that proves **Temporal is the production-grade harness for agentic AI** by running an autonomous, self-evolving stock-trading agent on stage. The demo must:
+**Talk title:** Temporal: The Durable Operating System for Agentic AI
 
-- Look real-life (real ticker, real OHLCV data option, realistic UI)
-- Stay reliably scriptable for stage demos (env-switchable full-mock mode)
-- Showcase the *durability* story (kill the worker mid-trade; Temporal resumes seamlessly)
-- Tell a coherent OpenAI Agents SDK + Temporal story end-to-end (one agent SDK across the stack)
+**Synopsis (delivered on stage):** Temporal provides the durable OS layer that makes autonomous agents production-ready — preserving state, replaying decisions, simplifying how pluggable components connect, and surviving crashes, restarts, and chaos. We show an autonomous stock-trading agent built with the **Durable Harness Pattern** that runs reliably with safety built in. It uses Temporal's durable workflows, activities, signals, and event history to behave like an **Agentic AI operating system, not just a script runner** — adding autosave, guardrails, observability, and long-lived coordination.
 
-Non-goals: real money trading; production-grade security; multi-user auth; persistent multi-day runs.
+**Demo arc on stage (three acts):**
+1. **Discovery** — fan-out N sandboxed parallel backtests, deterministic pick of the winner. (Temporal: child workflows + fan-in.)
+2. **Live execution** — tick loop with market + news context, OpenAI trade-intent, deterministic news-aware risk guardrail, human-in-the-loop approval modal for big trades.
+3. **Chaos survival** — kill the worker mid-trade → Temporal resumes from the exact line. Inject bad news → guardrail blocks. Fast-forward ticks for pacing.
+
+**The demo must:**
+- Look real-life (real ticker, env-switchable real OHLCV mode, realistic UI)
+- Stay scriptable for stage demos (full-mock mode for predictable narrative beats)
+- Headline the durability story (kill-worker / resume; pause-for-approval at zero cost)
+- Make Temporal's event history visible (a tab in Temporal Web UI is shown live)
+
+**Non-goals:** real money trading; production-grade security; multi-user auth; persistent multi-day runs; self-evolution / drift-driven re-planning (cut from v1).
 
 ---
 
-## 2. Scope summary (decisions locked during brainstorm)
+## 2. Scope summary (locked, v2 simplification applied)
 
 | Area | Decision |
 |---|---|
-| Demo length & climax | 15+ min, full Phase 1→4 self-evolution |
-| LLM stack | OpenAI everywhere via `temporalio.contrib.openai_agents` |
-| Code-execution sandbox | OpenAI Agents SDK SandboxAgent + Docker backend |
-| Data sources | Env-switchable: `DATA_MODE=mock` (Mockoon) or `DATA_MODE=live` (Yahoo Finance + Mockoon for news/broker) |
+| Demo length & climax | 10–12 min, climax = Kill-Worker → Temporal resumes mid-trade |
+| LLM stack | **OpenAI Agents SDK + `temporalio.contrib.openai_agents` plugin.** Trade-intent `Agent` is defined and run inside the parent workflow; LLM calls auto-dispatched as durable activities. Tools (`fetch_market_snapshot`, `fetch_news_snapshot`) wrapped via `activity_as_tool`. |
+| Backtest code | **Deterministic per-strategy templates** (`backtest_template.py`); runs in Docker sandbox; LLM is NOT called per backtest |
+| Code-execution sandbox | Docker sandbox spawned via `docker.sock` from the worker (TA-Lib pre-baked image) |
+| Data sources | Env-switchable: `DATA_MODE=mock` (Mockoon) or `DATA_MODE=live` (Yahoo Finance) |
 | Approval UX | In-app React modal (no Slack/Telegram) |
-| Domain DB | Mockoon (`/db/trades`, `/db/strategy`, `/db/positions`, `/db/audit`) |
+| Domain DB | Mockoon (`/db/trades`, `/db/strategy`, `/db/audit`) |
 | FastAPI DB | SQLite (run registry, idempotency keys, chaos events) |
 | Live loop tick | `TICK_SECONDS` env, default `10` |
-| Broker MCP server | Dropped for v1 — Activity calls Mockoon directly |
-| Stage controls | Full chaos panel in UI (kill worker, restart, crash broker, inject news, force drift, fast-forward) |
+| Broker MCP server | Dropped — Activity calls Mockoon directly |
+| Mockoon runtime | Runs on the host (Mockoon Desktop or `mockoon-cli`); NOT bundled in compose |
+| Stage controls | Kill Worker, Restart Worker, Inject Bad News, Fast Forward (4 buttons) |
 | Control plane | FastAPI is sole Temporal client; UI talks to FastAPI; SSE for live events |
+| **REMOVED in v2** | Phase 4 drift detection, `force_drift` signal, `EVOLVING` phase, Crash/Restart Broker chaos buttons, LLM-generated backtest code |
 
 ---
 
@@ -72,16 +83,19 @@ Non-goals: real money trading; production-grade security; multi-user auth; persi
                                                                 │ (Temporal-aware)
 ```
 
-### 3.1 Containers (docker-compose.yml)
+### 3.1 Host vs compose
 
-1. `temporal` — `temporalio/auto-setup:latest` (`:7233` gRPC, `:8233` Web UI)
-2. `mockoon` — `mockoon/cli:latest` (`:3001`), loads `mockoon/demo.json`
-3. `fastapi` — Python 3.12, REST + SSE at `:8000`, mounts SQLite volume
-4. `worker` — Python 3.12, hosts workflow + activity registrations; mounts `/var/run/docker.sock`
-5. `frontend` — Vite dev server (`:5173`) for dev mode; nginx-served build for "demo mode"
-6. `sandbox-base` — **image only** (not a running service); pre-baked with TA-Lib, yfinance, pandas, numpy, openai-agents
+**On the host** (NOT bundled in compose):
+- `temporal server start-dev --ip 0.0.0.0` — gRPC `:7233`, Web UI `:8233`
+- Mockoon Desktop (or `mockoon-cli`) loaded with `mockoon/demo.json` — `:3001`
+- `durable-agent-sandbox:latest` Docker image (built once via `docker build -t durable-agent-sandbox:latest sandbox/`)
 
-All on `demo_net` bridge network.
+**In docker-compose.yml** (3 services on `demo_net` bridge):
+1. `fastapi` — Python 3.12, REST + SSE at `:8000`, mounts SQLite volume + `docker.sock`
+2. `worker` — Python 3.12, hosts workflows + activities + `OpenAIAgentsPlugin`; mounts `docker.sock` to spawn sibling sandbox containers
+3. `frontend` — Vite dev server at `:5173`
+
+Containers reach the host via `host.docker.internal:7233` and `http://host.docker.internal:3001`. The compose worker has IPv6 disabled (`sysctls: net.ipv6.conf.all.disable_ipv6=1`) to force IPv4 lookup of `host.docker.internal`.
 
 ### 3.2 Env-switchable data mode
 
@@ -111,15 +125,16 @@ class AgentInput(BaseModel):
 ```
 
 **Durable state (kept in Workflow Event History):**
-- `goal`, `limits`, `winning_strategy`, `positions`, `audit_log[]`, `live_metrics`, `last_decision`, `tick_count`, `phase` (enum: `SYNTHESIZING|WATCHING|AWAITING_APPROVAL|EVOLVING`)
+- `goal`, `limits`, `winning_strategy`, `positions`, `audit_log[]`, `tick_count`, `phase` (enum: `SYNTHESIZING|WATCHING|AWAITING_APPROVAL`)
 
 **Signals:**
 - `approve_trade(trade_id: str)` — Phase 3 approval
 - `reject_trade(trade_id: str, reason: str)` — Phase 3 rejection
-- `force_drift()` — chaos: trigger Phase 4 re-plan immediately
 - `fast_forward_tick()` — chaos: wake the timer immediately
 - `inject_news(headline: str, sentiment: float)` — chaos: push fake news into next tick
 - `stop()` — graceful shutdown
+
+> **v2 simplification:** `force_drift` signal, `drift_threshold` input field, and the `EVOLVING` phase enum value are unused in v1. The workflow exits cleanly after Phase 2+3 instead of looping back to Phase 1.
 
 **Queries:**
 - `get_state() -> StateSnapshot` — full current state for UI hydration
@@ -245,22 +260,8 @@ class SelfEvolvingStockAgentWorkflow:
                     start_to_close_timeout=timedelta(seconds=10),
                 )
                 self.state.positions.apply(order)
-
-                # ───── PHASE 4 check ─────
-                if self.state.tick_count % 5 == 0 or self._force_drift_requested:
-                    self._force_drift_requested = False
-                    drift = await workflow.execute_activity(
-                        check_drift,
-                        DriftInput(live_metrics=self.state.live_metrics,
-                                   baseline=self.state.winning_strategy.scorecard,
-                                   threshold=inp.drift_threshold),
-                        start_to_close_timeout=timedelta(seconds=10),
-                    )
-                    if drift.drifted:
-                        self.state.audit_log.append(AuditEvent.drift(drift))
-                        self.state.phase = Phase.EVOLVING
-                        drift_detected = True
-            # Loop back to Phase 1 for re-synthesis
+            # v1: workflow exits cleanly when self._stop is signalled.
+            # (Phase 4 drift detection and re-synthesis loop-back are deferred.)
 ```
 
 ### 4.4 Determinism guarantees
@@ -280,50 +281,34 @@ All activities live in `backend/worker/activities/`. All accept Pydantic inputs,
 |---|---|---|---|---|
 | `fetch_historical_data` | ticker, range | `HistoricalDataRef` | max 3 | DATA_MODE switch: yfinance vs Mockoon `/market/prices`; writes to a shared volume; returns a path |
 | `run_backtest_in_sandbox` | strategy_spec, data_ref | `Scorecard` | max 2 | Uses OpenAI Agents SDK SandboxAgent + Docker bridge (see §6) |
-| `fetch_market_snapshot` | ticker | `{price, indicators}` | max 5 | Yahoo or Mockoon `/market/quote` + `/market/indicators` |
-| `fetch_news_snapshot` | ticker | `{headlines[], sentiment}` | max 5 | Always Mockoon (no free real news source) |
-| `call_agent` | context bundle | `TradeIntent \| HOLD` | max 3, AuthErr non-retryable | OpenAI Agents SDK agent, `gpt-4o-mini` for speed; `max_retries=0` on the OpenAI client |
+| `fetch_market_snapshot` | ticker | `{price, indicators}` | max 5 | Yahoo or Mockoon `/market/quote` + `/market/indicators`. **Also exposed as an Agent tool** via `activity_as_tool`. |
+| `fetch_news_snapshot` | ticker | `{headlines[], sentiment}` | max 5 | Always Mockoon. **Also exposed as an Agent tool** via `activity_as_tool`. |
+| _LLM call_ | _Agent input_ | _`TradeIntent`_ | _plugin-managed_ | _The trade-intent Agent runs inside the workflow (`_run_trade_agent`). The `OpenAIAgentsPlugin` auto-dispatches each Agent LLM call as a Temporal activity with its own retry policy. No `call_agent` activity._ |
 | `risk_check` | intent, positions, news, limits | `{decision, reason}` | max 0 (pure) | Deterministic checks: notional caps, sentiment threshold, restricted-term blocklist |
 | `notify_ui` | event payload | `ok` | max 5 | POSTs to FastAPI `/internal/events` (shared-token auth) |
 | `place_order` | intent, idempotency_key | `OrderResult` | max 5 | Mockoon `POST /broker/orders`; idempotency on header `X-Idempotency-Key` |
 | `write_trade_record` | order_result | `ok` | max 5 | Mockoon `POST /db/trades` |
-| `check_drift` | live_metrics, baseline, threshold | `{drifted, reason}` | max 0 | Pure comparison |
 | `persist_strategy` | winning_strategy | `ok` | max 5 | Mockoon `POST /db/strategy` |
+
+> **v2 simplification:** `check_drift` activity is dropped from v1.
 
 ---
 
-## 6. The Sandbox bridge (the wow piece)
+## 6. The Sandbox bridge
 
-Per `references/python/ai-patterns.md` (OpenAI Agents SDK integration) and the Temporal+OpenAI Agents Sandbox blog (https://temporal.io/blog/introducing-temporal-and-agentic-sandboxes-openai-agents-sdk).
-
-> **Implementation note:** the exact import paths below are tentative — both `openai-agents` sandbox API and `temporalio.contrib.openai_agents` are recent additions and have moved between minor versions. The implementation plan will pin specific package versions and verify imports against the chosen versions. If the Temporal-aware sandbox client is not available at impl time, fall back to wrapping a plain `docker` SDK call from the activity and surfacing the same `Scorecard` contract — the workflow code is unaffected.
+For stage reliability, v1 uses **deterministic hand-written backtest templates** (one per strategy family) instead of LLM-generated code. The script still executes inside an isolated Docker sandbox (TA-Lib pre-baked, network disabled, mem-capped) so the "isolated code execution" story stays intact. The generated script is included in the `Scorecard.generated_code` field and shown in the War Room UI.
 
 ```python
-# backend/worker/activities/backtest.py — illustrative, exact imports TBD at impl time
+# backend/worker/activities/backtest.py (v2 — deterministic)
 from temporalio import activity
-from agents import Agent, Runner
-from agents.sandbox import CodeSandbox, DockerSandboxClient
-# When the temporal-aware client lands officially, swap the import below.
-# from temporalio.contrib.openai_agents import temporal_sandbox_client
+import docker
+from worker.activities.backtest_template import build_backtest_code
 
 @activity.defn
-async def run_backtest_in_sandbox(input: BacktestInput) -> Scorecard:
-    sandbox_client = DockerSandboxClient(
-        image="durable-agent-sandbox:latest",
-        # Resource caps so a runaway script can't burn the demo machine:
-        mem_limit="512m", cpu_quota=50_000,
-        network_disabled=True,  # backtest sandbox is offline; data is mounted
-    )
-    async with CodeSandbox(client=sandbox_client) as sandbox:
-        await sandbox.upload_file("/data/ohlcv.parquet", input.historical_data_ref)
-        agent = Agent(
-            name="quant-coder",
-            instructions=BACKTEST_PROMPT,
-            tools=[sandbox.run_python, sandbox.read_file, sandbox.write_file],
-            model="gpt-4o-mini",
-        )
-        result = await Runner.run(agent, input.strategy_spec.to_prompt())
-        return Scorecard.parse_raw(result.final_output)
+async def run_backtest_in_sandbox(inp: BacktestInput) -> Scorecard:
+    code = build_backtest_code(inp.strategy_spec, inp.historical_data_ref.path)
+    # ...spawn sibling docker container, mount `sandbox-data` volume, run `python -c <code>`,
+    #    parse the last JSON line of stdout as a Scorecard.
 ```
 
 Failure semantics:
@@ -384,7 +369,7 @@ CREATE TABLE chaos_events (
   ```json
   {
     "ts": "2026-05-21T10:23:00Z",
-    "kind": "phase_change | backtest_progress | trade_intent | risk_decision | approval_request | order_placed | chaos | drift_detected | audit",
+    "kind": "phase_change | backtest_progress | trade_intent | risk_decision | approval_request | order_placed | chaos | audit",
     "payload": { ... }
   }
   ```
@@ -396,16 +381,16 @@ CREATE TABLE chaos_events (
 Single-page app, three tabs + persistent chaos panel.
 
 **Tab 1 — Mission Control** (default)
-- Hero card: ticker, objective, phase badge, total ROI sparkline
-- Vertical stepper: Synthesizing → Watching → Awaiting Approval → Evolving
-- Live event log (SSE-driven virtualized list, color-coded by `kind`)
-- Workflow ID + deep-link to Temporal Web UI
+- Hero card: ticker, objective, phase badge
+- Phase chips: Synthesizing → Winner Selected → Watching → Awaiting Approval
+- Live event log (SSE-driven, color-coded by `kind`)
+- Workflow ID + deep-link to Temporal Web UI + ✕ detach button + Start (New) Run button
 
 **Tab 2 — Strategy War Room** (Phase 1)
 - Grid of N "sandbox cards"
 - Each card live-updates: status badge, Sharpe/ROI/Drawdown on completion
 - Winner glows + "WINNER" ribbon
-- Expandable "Generated Code" panel per card
+- Expandable "Generated Code" panel per card (shows the deterministic template that ran)
 
 **Tab 3 — Live Trading Floor** (Phases 2/3)
 - Price chart (recharts) — last 50 ticks
@@ -413,31 +398,30 @@ Single-page app, three tabs + persistent chaos panel.
 - Approval modal pops on `approval_request` event: trade details, news summary, risk rationale, two big buttons (Approve / Reject)
 
 **Persistent Chaos Panel** (right rail / drawer)
-- Buttons: Kill Worker, Restart Worker, Crash Broker, Inject Bad News, Force Drift, Fast-Forward Tick
+- Buttons: `Kill Worker`, `Restart Worker`, `Inject Bad News`, `Fast Forward`
 - Each calls `POST /api/chaos/{action}`
-- Toast confirmation on success
+- Mockoon stop/start is done in the Mockoon Desktop app directly, not via a UI button
 
 **Aesthetic:** dark slate background, neon (cyan/violet) accents, mono font for code, Framer Motion for phase transitions. shadcn primitives: `Card`, `Badge`, `Dialog`, `Sheet`, `Tabs`, `Button`, `Tooltip`, `Toast`.
 
 ---
 
-## 9. Stage demo script (target 15 min)
+## 9. Stage demo script (target 10–12 min)
 
 | Time | Action | Audience sees |
 |---|---|---|
-| 0:00 | Open UI, enter NVDA + objective, click Start | Phase badge → "Synthesizing" |
-| 0:30 | Switch to War Room tab | 8 sandbox cards spinning; expand one to see LLM-written code |
-| 1:30 | All sandboxes complete | Sharpe table, winner glows |
-| 2:00 | Auto-transition to Trading Floor | First tick fires; intent table fills |
-| 3:00 | **Chaos: Inject Bad News** | Next tick: news flips negative, risk_check blocks trade |
-| 4:30 | **Chaos: Fast-Forward Tick** + clean news | Trade intent → BUY → approval modal pops |
-| 5:00 | Click Approve | Order placed, trade record written |
-| 6:00 | **Chaos: Kill Worker** | Activity in flight; UI freezes |
-| 6:15 | **Chaos: Restart Worker** | Open Temporal Web UI: replay visible, activity completes |
-| 7:30 | Walk audience through Event History | LLM prompts/responses visible as Events |
-| 9:00 | **Chaos: Force Drift** | Phase badge → "Evolving"; Phase 1 re-fans out |
-| 11:00 | New winning strategy adopted | Trading Floor resumes |
-| 13:00 | Q&A buffer | — |
+| 0:00 | Open UI, enter NVDA, click Start Self-Evolving Agent | Phase badge → "Synthesizing"; workflow ID appears in header |
+| 0:30 | Switch to War Room | 8 sandbox cards populating; expand one to show the deterministic backtest code (TA-Lib + pandas) that ran inside the sandbox |
+| 1:30 | All sandboxes complete | Sharpe / ROI / Drawdown table; winner glows with "WINNER" ribbon |
+| 2:00 | Scroll to Trading Floor | First tick fires every 10s; price chart + intent table fill |
+| 3:00 | **Chaos: Inject Bad News** | Next tick: news goes negative + restricted-term match, risk_check returns `block`, trade does not place |
+| 4:30 | **Chaos: Fast Forward** + clean news returns | Trade intent → BUY → approval modal pops with risk summary |
+| 5:00 | Click Approve | `place_order` activity → broker order id appears in intent table, trade record written to Mockoon |
+| 6:00 | **Chaos: Kill Worker** | Activity mid-flight; UI freezes mid-tick |
+| 6:15 | **Chaos: Restart Worker** | Open Temporal Web UI in a side tab: show the replay continuing from the exact event |
+| 7:30 | Walk audience through Event History | Every LLM call, every signal, every order — all in the durable history |
+| 9:00 | Recap the OS framing | "This is the agent's autosave, guardrails, observability, and human-loop — all from Temporal primitives" |
+| 10:00 | Q&A buffer | — |
 
 ---
 
@@ -476,13 +460,13 @@ durable-agentic-harness/
 │   │   ├── db.py            # SQLite
 │   │   └── routes/{runs,events,chaos,approvals}.py
 │   └── worker/
-│       ├── main.py
-│       ├── workflows/{parent.py, backtest.py}
-│       └── activities/{market.py, news.py, llm.py, backtest.py, broker.py, risk.py, ui.py, drift.py, persist.py}
+│       ├── main.py                                    # OpenAIAgentsPlugin configured here
+│       ├── workflows/{parent.py, backtest.py, hello.py}
+│       └── activities/{market.py, news.py, backtest.py, backtest_template.py, broker.py, risk.py, ui.py, persist.py}
 ├── mockoon/
-│   └── demo.json
+│   └── demo.json                                      # load into Mockoon Desktop on host
 └── sandbox/
-    ├── Dockerfile           # base sandbox image: python + ta-lib + yfinance + pandas + openai-agents
+    ├── Dockerfile           # base sandbox image: python + ta-lib + pandas + pyarrow
     └── runner.py
 ```
 
@@ -492,13 +476,13 @@ durable-agentic-harness/
 
 **Tests (kept lightweight for a demo):**
 - Workflow replay tests with `WorkflowEnvironment.from_local` for the parent's happy path + each signal branch
-- Activity unit tests (`pytest`) for `risk_check` (pure), `place_order` (httpx mock), `call_agent` (OpenAI client mock)
+- Activity unit tests (`pytest`) for `risk_check` (pure), `place_order` (httpx mock). The Agent's LLM call is dispatched by `OpenAIAgentsPlugin` — covered indirectly via the e2e smoke test.
 - One end-to-end smoke test under `pytest -m e2e` that runs the full compose stack in CI
 
 **Observability:**
 - Temporal Web UI at `:8233`, deep-linked from React UI
 - `structlog` JSON logs across worker + FastAPI
-- Token-usage logged inside `call_agent` activity
+- LLM activity logs (per call) emitted by `OpenAIAgentsPlugin` — visible in worker stdout and Temporal Web UI activity history
 - LangSmith tracing via `temporalio.contrib.langsmith` deferred to v2
 
 ---
@@ -519,3 +503,6 @@ durable-agentic-harness/
 - Persistent run history beyond SQLite reset on compose-down
 - Slack / Telegram approval (env-toggle could be added in v2)
 - Broker MCP server (kept in `project_description.md` as v2 enhancement)
+- **Phase 4 self-evolution / drift detection** — the "drift triggers re-discovery" loop is deferred. Activities, signal, phase enum value, UI button, and stage moment all removed.
+- **Chaos buttons: Crash Broker / Restart Broker** — Mockoon runs on the host now, so stopping/starting it happens in Mockoon Desktop directly.
+- **LLM-generated backtest code** — replaced by deterministic `backtest_template.build_backtest_code(...)` for stage reliability. We still execute in a sandbox and display the code in the UI, just don't call OpenAI per backtest.

@@ -46,6 +46,9 @@ async def fetch_historical_data(ticker: str, range_: str) -> HistoricalDataRef:
 
 @activity.defn
 async def fetch_market_snapshot(ticker: str) -> MarketSnapshot:
+    """Get the latest market snapshot for a ticker: spot price plus the standard
+    technical indicators (RSI, EMA12, EMA26, MACD, Bollinger bands). Use this tool
+    only when the caller's input is missing or stale; one call returns everything."""
     if settings.data_mode == "live":
         try:
             import yfinance as yf

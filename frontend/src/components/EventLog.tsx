@@ -7,7 +7,6 @@ const KIND_COLORS: Record<string, string> = {
   risk_decision: "text-orange-300",
   approval_request: "text-yellow-300",
   order_placed: "text-emerald-300",
-  drift_detected: "text-rose-300",
   chaos: "text-pink-400",
   audit: "text-foreground/60",
 };

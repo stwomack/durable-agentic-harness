@@ -19,11 +19,8 @@ export function ChaosPanel({ workflowId }: { workflowId: string | null }) {
       <div className="flex flex-col gap-2">
         <Btn label="Kill Worker"     onClick={c.killWorker}    variant="danger" />
         <Btn label="Restart Worker"  onClick={c.restartWorker} variant="info" />
-        <Btn label="Crash Broker"    onClick={c.crashBroker}   variant="danger" />
-        <Btn label="Restart Broker"  onClick={c.restartBroker} variant="info" />
         <Btn label="Inject Bad News" onClick={c.injectBadNews} variant="warn" />
         <Btn label="Fast Forward"    onClick={c.fastForward}   variant="info" />
-        <Btn label="Force Drift"     onClick={c.forceDrift}    variant="warn" />
       </div>
     </div>
   );

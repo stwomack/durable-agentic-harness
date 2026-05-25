@@ -1,3 +1,8 @@
+"""v2 chaos surface: Kill/Restart Worker + Fast Forward + Inject Bad News.
+
+Removed in v2: crash_broker, restart_broker (Mockoon runs on the host via Mockoon
+Desktop, not in compose).
+"""
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -38,26 +43,6 @@ async def restart_worker() -> dict:
     return res
 
 
-@router.post("/crash_broker")
-async def crash_broker() -> dict:
-    try:
-        res = stop_container("mockoon")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    log_chaos("global", "crash_broker", res)
-    return res
-
-
-@router.post("/restart_broker")
-async def restart_broker() -> dict:
-    try:
-        res = start_container("mockoon")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    log_chaos("global", "restart_broker", res)
-    return res
-
-
 @router.post("/fast_forward")
 async def fast_forward(body: WorkflowChaos) -> dict:
     client = await get_temporal_client()
@@ -74,13 +59,4 @@ async def inject_news(body: InjectNewsBody) -> dict:
     # Multi-arg signals must be passed via args=[...]; positional > 1 raises TypeError.
     await h.signal("inject_news", args=[body.headline, body.sentiment])
     log_chaos(body.workflow_id, "inject_news", body.model_dump())
-    return {"ok": True}
-
-
-@router.post("/force_drift")
-async def force_drift(body: WorkflowChaos) -> dict:
-    client = await get_temporal_client()
-    h = client.get_workflow_handle(body.workflow_id)
-    await h.signal("force_drift")
-    log_chaos(body.workflow_id, "force_drift", {})
     return {"ok": True}

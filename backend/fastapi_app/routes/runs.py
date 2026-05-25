@@ -48,7 +48,6 @@ async def start_run(req: StartRunRequest) -> dict:
         candidate_strategies=default_candidate_strategies(n),
         approval_threshold=settings.approval_threshold_usd,
         tick_seconds=req.tick_seconds or settings.tick_seconds,
-        drift_threshold=settings.drift_threshold,
     )
     workflow_id = f"agent-{req.ticker.upper()}-{uuid.uuid4().hex[:8]}"
     client = await get_temporal_client()

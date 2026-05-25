@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { startRun } from "../lib/api";
 
-const PHASES = ["SYNTHESIZING", "WINNER_SELECTED", "WATCHING", "AWAITING_APPROVAL", "EVOLVING"];
+const PHASES = ["SYNTHESIZING", "WINNER_SELECTED", "WATCHING", "AWAITING_APPROVAL"];
 
 export function MissionControl({
   workflowId, onStart, currentPhase,

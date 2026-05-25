@@ -29,7 +29,6 @@ class AgentInput(BaseModel):
     limits: TradeLimits = Field(default_factory=TradeLimits)
     approval_threshold: float = 10_000.0
     tick_seconds: int = 10
-    drift_threshold: float = 0.20
 
 
 class HistoricalDataRef(BaseModel):
@@ -117,13 +116,6 @@ class TradeIntent(BaseModel):
     rationale: str
 
 
-class AgentCallInput(BaseModel):
-    winning_strategy: StrategySpec
-    market: MarketSnapshot
-    news: NewsSnapshot
-    positions: Positions
-
-
 class RiskCheckInput(BaseModel):
     intent: TradeIntent
     news: NewsSnapshot
@@ -140,18 +132,6 @@ class RiskResult(BaseModel):
 class PlaceOrderInput(BaseModel):
     intent: TradeIntent
     idempotency_key: str
-
-
-class DriftInput(BaseModel):
-    baseline_sharpe: float
-    live_roi: float
-    backtest_roi: float
-    threshold: float
-
-
-class DriftResult(BaseModel):
-    drifted: bool
-    reason: str
 
 
 class AuditEvent(BaseModel):

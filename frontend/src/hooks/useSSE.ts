@@ -26,7 +26,7 @@ export function useSSE(workflowId: string | null) {
       } catch {}
     };
     ["phase_change", "backtest_progress", "trade_intent", "risk_decision",
-     "approval_request", "order_placed", "drift_detected", "audit", "chaos"]
+     "approval_request", "order_placed", "audit", "chaos"]
       .forEach((k) => es.addEventListener(k, handler));
     return () => es.close();
   }, [workflowId]);

@@ -1,12 +1,27 @@
-# Self-Evolving Stock Agent — Implementation Plan
+# Temporal: The Durable Operating System for Agentic AI — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a stage-ready demo that runs an OpenAI Agents SDK trading agent inside a Temporal durable workflow — discovering, executing, and evolving a strategy with human-in-the-loop approval and full chaos-survival drama.
+**Goal:** Build a stage-ready demo that runs an autonomous stock-trading agent inside a Temporal durable workflow — discovering, executing, and chaos-surviving — to show how Temporal is the **durable OS for agentic AI** (autosave, guardrails, observability, long-lived coordination).
 
-**Architecture:** React UI → FastAPI (sole Temporal client) → Temporal Server → Worker (workflows + activities) → Mockoon (mocked market/news/broker/DB) + Docker sandboxes (OpenAI Agents SDK backtests). See [`docs/superpowers/specs/2026-05-21-self-evolving-stock-agent-design.md`](../specs/2026-05-21-self-evolving-stock-agent-design.md).
+**Architecture:** React UI → FastAPI (sole Temporal client) → Temporal Server (on host) → Worker (workflows + activities) → Mockoon on host (mocked market/news/broker/DB) + Docker sandbox per backtest. See [`docs/superpowers/specs/2026-05-21-self-evolving-stock-agent-design.md`](../specs/2026-05-21-self-evolving-stock-agent-design.md).
 
-**Tech Stack:** Python 3.12 (`temporalio`, `openai-agents`, `fastapi`, `pydantic`, `httpx`, `yfinance`, `docker`), TypeScript (Vite, React 18, shadcn/ui, Tailwind, Framer Motion, recharts), Mockoon CLI, Temporal `auto-setup` image, SQLite, Docker Compose.
+**Tech Stack:** Python 3.12 (`temporalio`, `openai`, `fastapi`, `pydantic`, `httpx`, `yfinance`, `pandas`, `pyarrow`, `docker`), TypeScript (Vite, React 18, shadcn/ui, Tailwind, recharts), Mockoon Desktop on host, Temporal `start-dev` on host, SQLite, Docker Compose.
+
+---
+
+## v2 simplification (applied 2026-05-22)
+
+After end-to-end implementation, the demo scope was tightened. The following items are **CUT from v1** and are kept here only as historical task descriptions. Do NOT implement them.
+
+| Cut item | Where it appears in this plan | Replacement |
+|---|---|---|
+| Phase 4 drift detection + re-evolution loop | Task 31 (`check_drift` activity), Task 32 (drift loop-back in parent) | Workflow exits cleanly after Phase 2+3. `check_drift` activity removed. Phase-4 stage moment removed from §9 of the spec. |
+| `force_drift` signal | Inside Task 26 (parent signals) and Task 34 (chaos route) and Task 35 (button) | Removed everywhere. |
+| `Crash Broker` / `Restart Broker` chaos buttons | Task 33 (chaos backend) and Task 34 (chaos routes) and Task 35 (panel UI) | Mockoon runs on host via Mockoon Desktop — user stops/starts it there. The two routes and buttons are removed. |
+| LLM-generated backtest code (OpenAI Agents SDK SandboxAgent) | Task 13 (`run_backtest_in_sandbox`) | Replaced by deterministic `backtest_template.build_backtest_code(strategy_spec, data_path)` per family (RSI/MACD/EMA/Bollinger/Mean-Reversion). Sandbox still runs the script in Docker. |
+| Compose-bundled Temporal + Mockoon | Task 8 (`docker-compose.yml`) | Both moved to host. Compose only has `fastapi`, `worker`, `frontend`. Containers reach the host via `host.docker.internal`. |
+| `temporalio.contrib.openai_agents` Temporal-aware sandbox | Task 13 | Direct `docker` SDK call from the activity. |
 
 ---
 
@@ -15,9 +30,9 @@
 | Phase | Tasks | Demoable milestone |
 |---|---|---|
 | **A — Foundation** | 1–10 | `docker compose up` succeeds; "hello" workflow runs end-to-end from FastAPI; frontend boots |
-| **B — Phase 1: War Room** | 11–21 | Submit ticker → N parallel backtests → winner highlighted in UI |
+| **B — Phase 1: War Room** | 11–21 | Submit ticker → N parallel deterministic backtests → winner highlighted in UI |
 | **C — Phase 2+3: Trading Floor** | 22–30 | Live loop ticks → intents → risk check → approval modal → broker order |
-| **D — Phase 4 + Chaos** | 31–36 | Drift detection re-plans; chaos panel kills/restarts worker mid-trade with Temporal recovery |
+| **D — Chaos** | 33–36 (drift tasks 31–32 cut) | Chaos panel kills/restarts worker mid-trade with Temporal recovery; Inject Bad News blocks; Fast Forward paces |
 
 ---
 

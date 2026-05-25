@@ -1,4 +1,4 @@
-export type Phase = "SYNTHESIZING" | "WATCHING" | "AWAITING_APPROVAL" | "EVOLVING";
+export type Phase = "SYNTHESIZING" | "WATCHING" | "AWAITING_APPROVAL";
 
 export type StrategySpec = {
   id: string;

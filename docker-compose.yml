@@ -17,7 +17,6 @@ services:
       - net.ipv6.conf.all.disable_ipv6=1
     ports: ["8000:8000"]
     volumes:
-      - fastapi-data:/app/fastapi_app
       - /var/run/docker.sock:/var/run/docker.sock
     networks: [demo_net]
 
@@ -51,7 +50,6 @@ networks:
     driver: bridge
 
 volumes:
-  fastapi-data:
   # Fixed name (no compose project prefix) so the worker can spawn sibling sandbox
   # containers via docker.sock and reference the volume by the same bare name.
   sandbox-data:

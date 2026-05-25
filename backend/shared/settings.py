@@ -14,7 +14,6 @@ class Settings(BaseSettings):
 
     data_mode: str = Field("mock", alias="DATA_MODE")  # "mock" | "live"
     tick_seconds: int = Field(10, alias="TICK_SECONDS")
-    drift_threshold: float = Field(0.20, alias="DRIFT_THRESHOLD")
     approval_threshold_usd: float = Field(10000.0, alias="APPROVAL_THRESHOLD_USD")
     num_sandboxes: int = Field(8, alias="NUM_SANDBOXES")
 
