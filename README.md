@@ -250,6 +250,57 @@ See [§9 of the design spec](docs/superpowers/specs/2026-05-21-self-evolving-sto
 
 ---
 
+## Screenshots
+
+A guided tour of the demo as it runs. Each shot maps to a phase from the [sequence diagram](#sequence-diagram) above.
+
+### 1. War Room — parallel backtest fan-out (Phase 1)
+8 sandboxed strategies run concurrently in airgapped Docker containers; the winner (highlighted) drives the live tick loop.
+
+![War Room with 8 parallel backtests, winner highlighted](docs/screenshots/1.png)
+
+### 2. Temporal Web UI — backtest fan-out timeline
+The Temporal timeline view shows N `BacktestSandboxWorkflow` children executing in parallel, followed by the first live-tick activities (`fetch_market_snapshot`, `fetch_news_snapshot`, `invoke_model_activity`, `risk_check`, `notify_ui`).
+
+![Temporal timeline: parallel BacktestSandboxWorkflow children and start of tick loop](docs/screenshots/2.png)
+
+### 3. Human-in-the-loop approval modal (Phase 4)
+Any trade above `APPROVAL_THRESHOLD_USD` blocks the workflow until the operator approves or rejects. The workflow consumes zero CPU while waiting on the `human_review` signal.
+
+![Approval modal with trade details, risk reason, and approve/reject buttons](docs/screenshots/3.png)
+
+### 4. Temporal Web UI — tick loop with chaos event
+A live tick: agent calls tools (`fetch_market_snapshot`, `fetch_news_snapshot`), `invoke_model_activity` runs the LLM, `risk_check` allows, `place_order` + `approve_trade` complete. Mid-loop, `inject_news` chaos lands as a signal recorded in history.
+
+![Temporal timeline showing live tick activities and inject_news chaos signal](docs/screenshots/4.png)
+
+### 5. Kill Worker — workflow task timed out
+After clicking **Kill Worker**, Temporal records a `WORKFLOW_TASK_TIMED_OUT` event. The workflow itself is unharmed — event history is preserved on the Temporal Service and replay will resume on the next worker.
+
+![Temporal Web UI showing Workflow Task Timed Out banner after kill](docs/screenshots/5.png)
+
+### 6. Worker restart — resume from the exact event (Phase 5)
+Banner: *"Worker up. Temporal replayed event history and resumed the Agent loop from the exact event it was on — no lost state, no retry from scratch."* Trade intents pre-kill are preserved; the loop continues.
+
+![UI banner confirming worker restart and replay; trade intents intact](docs/screenshots/6.png)
+
+### 7. Mockoon Desktop — mocked external services
+Mockoon serves the market, news, broker, and domain-DB endpoints on `:3001` so the demo runs offline and stays deterministic on stage.
+
+![Mockoon Desktop with /market, /news, /broker, /db routes configured](docs/screenshots/7.png)
+
+### 8. Temporal Web UI — multi-tick history with retry attempts
+Zoomed timeline showing multiple tick iterations after **Fast Forward**, including `place_order` with an `Attempt N/50` indicator — visual proof that activities are durably retried by Temporal.
+
+![Temporal timeline across several ticks with attempt counters on place_order](docs/screenshots/8.png)
+
+### 9. Temporal Web UI — risk guardrail blocks a trade
+After **Inject Bad News**, `risk_check` returns `block` and `reject_trade` is recorded in history instead of `place_order` — the deterministic guardrail short-circuits before the broker call.
+
+![Temporal timeline showing reject_trade event after inject_bad_news](docs/screenshots/9.png)
+
+---
+
 ## Project layout
 
 ```
