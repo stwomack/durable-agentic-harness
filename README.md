@@ -9,10 +9,25 @@ An autonomous stock-trading agent that:
 
 Temporal provides the durable OS layer: autosave (workflow state = event history), guardrails (deterministic activities + signals), observability (every LLM call / tool call / signal is a queryable event), and long-lived coordination (workflows pause for approval at zero CPU cost).
 
-1. **Canonical context for AI/coding agents:** [`AGENTS.md`](AGENTS.md)
-2. **Locked design spec:** [`docs/superpowers/specs/2026-05-21-self-evolving-stock-agent-design.md`](docs/superpowers/specs/2026-05-21-self-evolving-stock-agent-design.md)
-3. **Implementation plan & history:** [`docs/superpowers/plans/2026-05-21-self-evolving-stock-agent-plan.md`](docs/superpowers/plans/2026-05-21-self-evolving-stock-agent-plan.md)
-4. **Original brainstorm:** [`project_description.md`](project_description.md)
+---
+## Why Temporal? — The Durable OS for Agentic AI
+
+**Agents are easy to demo. Hard to operate.** Every production agent eventually hits the same wall: LLM calls flake, workers crash mid-tool-call, human approvals stall for hours, parallel work loses children on restart. The usual answer — "just add retries + Redis + a state machine" — is the long road to badly reinventing Temporal.
+
+**Reframe Temporal not as a workflow engine, but as OS primitives for agent loops:**
+
+| OS primitive | Temporal equivalent | What it gives agents |
+|---|---|---|
+| Process scheduling | Workers + task queues | LLM/tool work dispatched durably, anywhere |
+| Autosave / journaling | Event history | Replay from the exact event after a crash |
+| IPC / interrupts | Signals, Updates & queries | Human-in-the-loop, mid-flight steering |
+| Memory / state | Workflow state | Survives restarts — no Redis, no S3 checkpoints |
+| Drivers | Activities | All side-effects, retried & idempotent by default |
+| Long-lived sleep | `workflow.sleep()` | Pause days/weeks at zero CPU cost |
+
+> *What Linux did for processes, Temporal does for agent loops.*
+
+What this demo strips out — that you'd otherwise be writing yourself: no Celery, no Redis-backed queue, no hand-rolled retry policy, no "save progress to S3" code, no state machine for human approvals, no orphan-child cleanup on worker restart. **Temporal owns all of it.** What's left on top is just the agent logic.
 
 ---
 
@@ -327,10 +342,13 @@ durable-agentic-harness/
 
 ---
 
-## How the OpenAI Agents SDK integrates with Temporal
+## The Durable Harness — How the OpenAI Agents SDK integrates with Temporal (wrapping `Runner.run` in a Temporal workflow)
 
-The trade-intent step uses the canonical `temporalio.contrib.openai_agents` pattern from
-[temporal-community/openai-agents-demos](https://github.com/temporal-community/openai-agents-demos):
+The core architectural move is small but consequential: **call the OpenAI Agents SDK's `Runner.run()` *from inside* a Temporal workflow.** That single line — `await Runner.run(agent, input=msg)` — when made from a `@workflow.defn`, becomes the durable harness around the agent loop. The workflow is the harness; the agent loop is what runs inside it.
+
+Three things click together to make it durable, using the canonical `temporalio.contrib.openai_agents` pattern from [temporal-community/openai-agents-demos](https://github.com/temporal-community/openai-agents-demos):
+
+**1. `OpenAIAgentsPlugin` lifts every LLM call into a Temporal activity.** Each model invocation the Agents SDK makes is automatically dispatched as an activity — retried per policy, journaled in event history — with zero glue code on the application side.
 
 ```python
 # backend/worker/main.py
@@ -345,6 +363,10 @@ client = await Client.connect(
     ...
 )
 ```
+
+**2. `activity_as_tool(...)` lifts every tool the Agent can call into a Temporal activity.** The Agent thinks it's calling a regular Python function; Temporal sees a durable, retryable activity with timeouts and idempotency.
+
+**3. `output_type=TradeIntent` makes the Agent emit a typed Pydantic object** — no JSON-parse-and-pray glue between the LLM and the workflow.
 
 ```python
 # backend/worker/workflows/parent.py — _run_trade_agent()
@@ -361,14 +383,18 @@ agent = Agent(
     ],
     output_type=TradeIntent,
 )
-result = await Runner.run(agent, input=input_msg, max_turns=20)
+result = await Runner.run(agent, input=input_msg, max_turns=20)   # ← durable harness
 ```
 
-**What this gives you for free:**
+**What "durable harness" actually buys you:** kill the worker mid-`Runner.run` — even mid-LLM-call, even between tool invocations. The next worker that polls the task queue picks up the same workflow execution, replays event history up to the last completed event, and the agent resumes its multi-turn reasoning from that exact point. Same tools already called, same intermediate state, no retry-from-scratch, no lost reasoning chain.
+
+**What you get for free:**
 - Every LLM call the Agent makes is dispatched as a Temporal activity (durable, retryable, in event history)
 - Tool invocations route through `fetch_market_snapshot` / `fetch_news_snapshot` activities — also durable
 - Worker crash mid-agent-loop: Temporal replays from the last completed event when the worker restarts
 - The Agent's structured `output_type=TradeIntent` removes any JSON-parsing fragility
+
+> *The harness is the workflow. The LLM is just an activity. Everything between — retries, state, replay, approvals, fan-out — is Temporal.*
 
 ---
 
@@ -526,6 +552,14 @@ Contributions are welcome — bug fixes, new chaos buttons, alternative LLM prov
 - Activities own all side effects; workflows only orchestrate.
 - Update [`AGENTS.md`](AGENTS.md) and the relevant [`docs/superpowers/specs/`](docs/superpowers/specs/) entry if you change the demo contract.
 - Confirm `docker compose up --build` still runs the full choreography before opening a PR.
+
+---
+
+## Supporting docs
+1. **Canonical context for AI/coding agents:** [`AGENTS.md`](AGENTS.md)
+2. **Locked design spec:** [`docs/superpowers/specs/2026-05-21-self-evolving-stock-agent-design.md`](docs/superpowers/specs/2026-05-21-self-evolving-stock-agent-design.md)
+3. **Implementation plan & history:** [`docs/superpowers/plans/2026-05-21-self-evolving-stock-agent-plan.md`](docs/superpowers/plans/2026-05-21-self-evolving-stock-agent-plan.md)
+4. **Original brainstorm:** [`project_description.md`](project_description.md)
 
 ---
 
