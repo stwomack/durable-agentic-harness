@@ -565,6 +565,8 @@ Contributions are welcome — bug fixes, new chaos buttons, alternative LLM prov
 
 ## License & credits
 
+Developer - Darshit Vora
+
 This project is released under the MIT License.
 
 ```
